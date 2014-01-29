@@ -2,9 +2,6 @@
 
 include './libs/build.php';
 
-define("RELEASE_DIR", "");
-define("BUILD_DIR", __DIR__."/cache/");
-
 /*
  * Command line parameters
  * 
@@ -16,6 +13,8 @@ define("BUILD_DIR", __DIR__."/cache/");
 
 
 Build::get()->define_params();
+Build::get()->setReleasePath('C:/src/_build/release/');
+Build::get()->setBuildPath('C:/src/_build/cache/');
 
 /*
  * Init tools

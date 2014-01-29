@@ -4,6 +4,8 @@ include 'utils.php';
 
 class Build {
 	private static $instance;
+	private static $release_path;
+	private static $build_path;
 	private static $variant  = array('develop', 'production', 'debug');
 	private static $platform = array('x32', 'x64');
 	private static $os_type  = array('win');
@@ -13,6 +15,7 @@ class Build {
 	private static $output = array();
 	private static $src_files_old = array();
 	private static $src_files = array();
+	private static $extentions = array();
 	private static $cnt_files = 0;
 	private static $cnt_lines = 0;
 
@@ -113,7 +116,7 @@ class Build {
 	}
 	
 	public function exec() {
-		var_dump(self::$targets);
+		//var_dump(self::$targets);
 		echo 'Targets: '.count(self::$targets)."\n";
 		foreach(self::$os_type as $os) {
 			echo 'OS: '.$os."\n";
@@ -125,7 +128,7 @@ class Build {
 						
 					  $cnt_files+=count($target['files']);
 
-					  $build_dir = BUILD_DIR.DIRECTORY_SEPARATOR.'build'.DIRECTORY_SEPARATOR.$os.DIRECTORY_SEPARATOR.$vardev.DIRECTORY_SEPARATOR.$pl;
+					  $build_dir = self::$build_path.DIRECTORY_SEPARATOR.'build'.DIRECTORY_SEPARATOR.$os.DIRECTORY_SEPARATOR.$vardev.DIRECTORY_SEPARATOR.$pl;
 					  echo 'Build folder: '.$build_dir.$target['dir']."\n";
 					  if(!file_exists($build_dir)) {
 						mkdir($build_dir, 0x0777, true);
@@ -148,7 +151,7 @@ class Build {
 						$cmd = $CL_PATH.'cl.exe" /MT '. $includes . $filename . ' /Fo:'.$filename_out;
 						//echo $cmd."\n";
 						$curTime = microtime(true);
-					    exec($cmd, $output, $ret);
+					    //exec($cmd, $output, $ret);
 					    self::$time_cl += round(microtime(true) - $curTime,3)*1000; 
 					//    var_dump($output);
 					//break;
@@ -165,4 +168,12 @@ class Build {
 		echo 'Scan time: '.self::$time_scan.' ms'."\n";
 		echo 'Cl time: '.self::$time_cl.' ms'."\n";
 	}
+	
+	public function setReleasePath($release_path) {
+		self::$release_path = $release_path;
+	}
+	public function setBuildPath($build_path) {
+		self::$build_path = $build_path;
+	}
+
 }

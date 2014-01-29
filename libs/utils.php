@@ -15,6 +15,10 @@ class Utils {
 		return pathinfo($filename, PATHINFO_EXTENSION);
 	}
 
+	static public function getFileName($filename) {
+		return pathinfo($filename, PATHINFO_FILENAME);
+	}
+
 	static public function calcHash($filename) {
 		return md5_file($filename);
 	}
