@@ -23,16 +23,16 @@ Build::get()->setBuildPath('C:/src/_build/cache/');
 
 Build::get()->use_tool('svn', array());
 Build::get()->use_tool('ms.cl.2013', array(
-		'home_dir.win.x64' => 'C:\\tools\\Microsoft Visual Studio 12.0\\VC\\bin\\amd64\\'
-		'home_dir.win.x32' => 'C:\\tools\\Microsoft Visual Studio 12.0\\VC\\bin\\i386\\'
+		'home_dir.Windows_NT.AMD64' => 'C:\\tools\\Microsoft Visual Studio 12.0\\VC\\bin\\amd64\\',
+		'home_dir.Windows_NT.i386' => 'C:\\tools\\Microsoft Visual Studio 12.0\\VC\\bin\\i386\\'
 		));
 Build::get()->use_tool('ms.link.2013', array(
-		'home_dir.win.x64' => 'C:\\tools\\Microsoft Visual Studio 12.0\\VC\\bin\\amd64\\'
-		'home_dir.win.x32' => 'C:\\tools\\Microsoft Visual Studio 12.0\\VC\\bin\\i386\\'
+		'home_dir.Windows_NT.AMD64' => 'C:\\tools\\Microsoft Visual Studio 12.0\\VC\\bin\\amd64\\',
+		'home_dir.Windows_NT.i386' => 'C:\\tools\\Microsoft Visual Studio 12.0\\VC\\bin\\i386\\'
 		));
 Build::get()->use_tool('signtool', array(
-		'home_dir.win.x64' => 'C:\\tools\\SDK\\8.1\\bin\\'
-		'home_dir.win.x32' => 'C:\\tools\\SDK\\8.1\\bin\\'
+		'home_dir.Windows_NT.AMD64' => 'C:\\tools\\SDK\\8.1\\bin\\',
+		'home_dir.Windows_NT.i386' => 'C:\\tools\\SDK\\8.1\\bin\\'
 		));
 
 /*

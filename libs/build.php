@@ -1,6 +1,8 @@
 <?
 
 include 'utils.php';
+include 'enviroment.php';
+include __DIR__.'/../tasks/winapp.php';
 
 class Build {
 	private static $instance;
@@ -9,8 +11,8 @@ class Build {
 	private static $variant  = array('develop', 'production', 'debug');
 	private static $platform = array('x32', 'x64');
 	private static $os_type  = array('win');
-	private static $current_root = __DIR__;
-	private static $targets = array();
+	private static $roots   = array();
+	private static $current_root = '';
 	private static $tools   = array();
 	private static $output = array();
 	private static $src_files_old = array();
@@ -24,8 +26,8 @@ class Build {
 
 	
 	private function __construct()
-    {
-    }
+	{
+	}
 
     public static function get()
     {
@@ -81,23 +83,29 @@ class Build {
 		$display = Array ( 'bi.root', 'bi.config' );
 		foreach($sources as $source) {
 		  echo 'Scan: '.$source."\n";
-		  $it = new RecursiveDirectoryIterator($source);
-		  foreach(new RecursiveIteratorIterator($it) as $file) {
-			if (in_array(basename($file), $display)) {
-			  echo 'include: '.$file . "\n";
-			  include($file);
+			if ($handle = opendir($source)) {
+				while (false !== ($entry = readdir($handle))) {
+					if ($entry != "." && $entry != "..") {
+						if (in_array(basename($entry), $display)) {
+						  echo 'include: '.$entry . "\n";
+						  include($source.DIRECTORY_SEPARATOR.$entry);
+						}						
+					}
+				}
+				closedir($handle);
 			}
-		  }
 		}
 		self::$time_scan = round(microtime(true) - $curTime,3)*1000; 
 	}
 		
 	public function reg_root($root_name, $params) {
-		self::$current_root = $params['home_dir'];
+		self::$current_root = $root_name;
+		self::$roots[$root_name] = $params;
+		self::$roots[$current_root]['targets'] = array();
 		if(isset($params['sources'])) {
 			$display = Array ( 'bi.root', 'bi.config' );
 			foreach($params['sources'] as $source) {
-			  echo 'Scan: '.$params['home_dir'].DIRECTORY_SEPARATOR.$source."\n";
+			  echo 'Scan targets: '.$params['home_dir'].DIRECTORY_SEPARATOR.$source."\n";
 			  $it = new RecursiveDirectoryIterator($params['home_dir'].DIRECTORY_SEPARATOR.$source);
 			  foreach(new RecursiveIteratorIterator($it) as $file) {
 				if (in_array(basename($file), $display)) {
@@ -108,56 +116,71 @@ class Build {
 			}
 		}
 	}
+	public function getRootHomeDir($root_name) {
+		if(isset(self::$roots[$root_name][ 'home_dir'])) {
+			return self::$roots[$root_name][ 'home_dir'];
+		}
+		return '';
+	}
 	
 	public function reg_target($target_name, $params) {
-	   $params['dir'] = substr($params['home_dir'], strlen(self::$current_root)-strlen($params['home_dir']));
+	   $params['dir'] = substr($params['home_dir'], strlen(self::$roots[self::$current_root]['home_dir'])-strlen($params['home_dir']));
 	   echo 'Target: '.$params['dir'].'//'.$target_name."\n";
-	   self::$targets[$params['dir'].'//'.$target_name] = $params;
+	   self::$roots[self::$current_root]['targets'][$params['dir'].'//'.$target_name] = $params;
 	}
 	
 	public function exec() {
 		//var_dump(self::$targets);
-		echo 'Targets: '.count(self::$targets)."\n";
+		$enviroment  = new Enviroment();
+		//echo 'Targets: '.count(self::$targets)."\n";
 		foreach(self::$os_type as $os) {
 			echo 'OS: '.$os."\n";
 			foreach(self::$variant as $vardev) {
 				echo 'Variant: '.$vardev."\n";
 				foreach(self::$platform as $pl) {
 					echo 'Platform: '.$pl."\n";
-					foreach(self::$targets as $key => $target) {
-						
-					  $cnt_files+=count($target['files']);
+					$enviroment->setEnv($os, $pl, $variant);
+					foreach(self::$roots as $key => $root) {
+						//var_dump($root);
+						foreach($root['targets'] as $key => $target) {
+							
+						  $cnt_files+=count($target['files']);
 
-					  $build_dir = self::$build_path.DIRECTORY_SEPARATOR.'build'.DIRECTORY_SEPARATOR.$os.DIRECTORY_SEPARATOR.$vardev.DIRECTORY_SEPARATOR.$pl;
-					  echo 'Build folder: '.$build_dir.$target['dir']."\n";
-					  if(!file_exists($build_dir)) {
-						mkdir($build_dir, 0x0777, true);
-					  }
-					  
-					  $includes='';
-					  
-					  foreach($target['include'] as $include) {
-							$includes.='/I"'.$target['src_path'].DIRECTORY_SEPARATOR.$include.'" ';
-					  }
+						  $build_dir = self::$build_path.DIRECTORY_SEPARATOR.'build'.DIRECTORY_SEPARATOR.$os.DIRECTORY_SEPARATOR.$vardev.DIRECTORY_SEPARATOR.$pl;
+						  echo 'Build folder: '.$build_dir.$target['dir']."\n";
+						  
+						  $wapp = new WinApp();
+						  $wapp->static_lib($enviroment, $build_dir, $key, $target);
+						  /*
+						  if(!file_exists($build_dir)) {
+							mkdir($build_dir, 0x0777, true);
+						  }
+						  
+						  $includes='';
+						  
+						  foreach($target['include'] as $include) {
+								$includes.='/I"'.$target['src_path'].DIRECTORY_SEPARATOR.$include.'" ';
+						  }
 
-					  foreach($target['src'] as $file) {
-						$filename = $target['home_dir'].DIRECTORY_SEPARATOR.$file;
-						//echo 'extension:'.Utils::getFileExtension($filename);
-						//self::$cnt_lines+=Utils::getFileLines($filename);
-						$md = Utils::calcHash($filename);
-						$filename_out = $build_dir.$file.'.obj';
-						
-						$CL_PATH = '"C:\\tools\\Microsoft Visual Studio 12.0\\VC\\bin\\amd64\\';
-						$cmd = $CL_PATH.'cl.exe" /MT '. $includes . $filename . ' /Fo:'.$filename_out;
-						//echo $cmd."\n";
-						$curTime = microtime(true);
-					    //exec($cmd, $output, $ret);
-					    self::$time_cl += round(microtime(true) - $curTime,3)*1000; 
-					//    var_dump($output);
-					//break;
-						$src_files[$filename] = array('md5' => $md);
+						  foreach($target['src'] as $file) {
+							$filename = $target['home_dir'].DIRECTORY_SEPARATOR.$file;
+							//echo 'extension:'.Utils::getFileExtension($filename);
+							//self::$cnt_lines+=Utils::getFileLines($filename);
+							$md = Utils::calcHash($filename);
+							$filename_out = $build_dir.$file.'.obj';
+							
+							$CL_PATH = '"C:\\tools\\Microsoft Visual Studio 12.0\\VC\\bin\\amd64\\';
+							$cmd = $CL_PATH.'cl.exe" /MT '. $includes . $filename . ' /Fo:'.$filename_out;
+							//echo $cmd."\n";
+							$curTime = microtime(true);
+							//exec($cmd, $output, $ret);
+							self::$time_cl += round(microtime(true) - $curTime,3)*1000; 
+						//    var_dump($output);
+						//break;
+							$src_files[$filename] = array('md5' => $md);
 
-					  }
+						  }*/
+						}
 					}
 				}
 			}
