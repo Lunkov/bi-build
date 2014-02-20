@@ -1,4 +1,4 @@
 <?
 
-calss cat {
+class cat {
 }

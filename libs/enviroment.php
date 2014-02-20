@@ -1,29 +1,18 @@
 <?
 
 class Enviroment {
-	private $variant;
-	private $platform;
-	private $os_type;
-
-	public function setEnv($os_type, $platform, $variant) {
-		$this->os_type = $os_type;
-		$this->platform = $platform;
-		$this->variant = $variant;
-	}
-	public function getEnvOS() {
-		return $os_type;
-	}
-	public function getEnvPlatform() {
-		return $platform;
-	}
-	public function getEnvVariant() {
-		return $variant;
-	}
-	public function getHostOS() {
+	
+	public static function getHostOS() {
 		return $_SERVER['OS'];
 	}
-        public function getHostPlatform() {
+	public static function getHostPlatform() {
 		return $_SERVER['PROCESSOR_ARCHITEW6432'];
+	}
+	public static function getTemp() {
+		return $_SERVER['TEMP'];
+	}
+	public static function getProcCount() {
+		return isset($_SERVER['NUMBER_OF_PROCESSORS']) ? $_SERVER['NUMBER_OF_PROCESSORS'] : 1 ;
 	}
 
 }

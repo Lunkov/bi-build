@@ -1,9 +1,14 @@
 <?
 
 class Utils {
-	static public function getFileLines($file) {
+	
+	/*
+	 * Calc lines into file
+	 * $filename - file name
+	 * */
+	static public function getFileLines($filename) {
 		$lines = 0;
-		$f = fopen($file, 'rb');
+		$f = fopen($filename, 'rb');
 		while (!feof($f)) {
 			$lines += substr_count(fread($f, 8192), "\n");
 		}
@@ -11,6 +16,10 @@ class Utils {
 		return $lines;
 	}
 	
+	/*
+	 * Get extention of file
+	 * $filename - file name
+	 * */
 	static public function getFileExtension($filename) {
 		return pathinfo($filename, PATHINFO_EXTENSION);
 	}

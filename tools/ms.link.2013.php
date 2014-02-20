@@ -4,6 +4,8 @@ class mslink2013 {
 	// go to http://msdn.microsoft.com/ru-ru/library/y0zzbyt4.aspx
 	
 	private $cflags = ' /NOLOGO /NODEFAULTLIB /WX /OPT:REF /INCREMENTAL:NO /RELEASE ';
+	private $includes = '';
+	private $libs = '';
 	private $params;
 	
 	function init($params) {
