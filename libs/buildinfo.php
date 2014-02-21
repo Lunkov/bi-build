@@ -15,13 +15,13 @@ class BuildInfo {
 		$this->variant = $variant;
 	}
 	public function getOS() {
-		return $os_type;
+		return $this->os_type;
 	}
 	public function getPlatform() {
-		return $platform;
+		return $this->platform;
 	}
 	public function getVariant() {
-		return $variant;
+		return $this->variant;
 	}
 
 }

@@ -54,6 +54,8 @@ class ProcessManager {
                 }
             }
         }
+        unset($this->scripts);
+        $this->scripts = array();
     }
 }
 

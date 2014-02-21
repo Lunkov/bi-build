@@ -16,6 +16,22 @@ class WiX {
 	}
 
 	public function wxs($buildinfo, $build_dir, $target_name, &$target) {
+		foreach($target['src'] as $file) {
+			//$filename_in = $target['home_dir'].DIRECTORY_SEPARATOR.$file;
+			$filename_in = $file;
+			$extention  = Utils::getFileExtension($file);
+			$out = '';
+			//echo '++'.$b_dir."\n";
+			if($extention == 'wxs') $this->wxx2wixobj($b_dir, $filename_in, $flags, $includes, $out);
+			if($extention == 'wxl') $this->wxx2wixobj($b_dir, $filename_in, $flags, $includes, $out);
+			
+			if(strlen($out)>0) {
+				$cl_result[] = $out;
+			}
+		}
+		$curTime = microtime(true);
+		Build::get()->execScripts();
+		$this->time_work += round(microtime(true) - $curTime,3)*1000; 		
 	}
 	
 	public function printTimers() {

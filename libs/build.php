@@ -18,13 +18,14 @@ class Build {
 	private static $src_files_old = array();
 	private static $src_files = array();
 	private static $extentions = array();
-	private static $cnt_files = 0;
-	private static $cnt_lines = 0;
 	private static $manager;
 	private static $buildinfo;
 
 	private static $time_scan = 0;
 	private static $time_work = 0;
+  private static $cnt_targets = 0;
+  private static $cnt_files = 0;
+	private static $cnt_lines = 0;
 	
 	private static $tasks = array();
 	private static $tools = array();
@@ -97,7 +98,15 @@ class Build {
 		}
 		return null;
 	}
-
+	
+  public function link2Target($root, $target) {
+		return array('root' =>$root, 'target'=>$target);
+	}
+  
+  public function link2ShareLib($lib) {
+		return array('sharelib'=>$target);
+	}  
+  
 	function addScript($params) {
 		self::$manager->addScript($params);
 	}
@@ -120,13 +129,69 @@ class Build {
 						if (in_array(basename($entry), $display)) {
 						  echo 'include: '.$entry . "\n";
 						  include($source.DIRECTORY_SEPARATOR.$entry);
-						}						
+						}			
 					}
 				}
 				closedir($handle);
 			}
 		}
+    self::sort_roots();
 		self::$time_scan = round(microtime(true) - $curTime,3)*1000; 
+  }
+  
+  private function sort_roots() {
+    $sort_root = array();
+    self::$cnt_targets = 0;
+    self::$cnt_files = 0;
+    foreach(self::$roots as $rkey => $root) {
+      foreach($root['targets'] as $tkey => $target) {
+        self::$cnt_targets++;
+        self::$cnt_files+=count($target['files']);
+      }
+    }
+    echo 'Targets count: '.$cnt_targets."\n";
+    /*
+    $sort_cnt_targets = 0;
+    $order = 0;
+    while(self::$cnt_targets > $sort_cnt_targets && self::$cnt_targets >= $order) {
+      echo 'Targets sorted count: '.$sort_cnt_targets."\n";
+      echo 'Order: '.$order."\n";
+      foreach(self::$roots as $rkey => $root) {
+        foreach($root['targets'] as $tkey => $target) {
+          $req = false;
+          echo 'target: '.$tkey."\n";
+          if(is_array($target['link'])) {
+            foreach($target['link'] as $link) {
+              $exists = isset($sort_root[$link['root']][$link['target']]['order']);
+              echo 'link:'.$link['root'].'+'.$link['target'].'='.$exists."\n";
+              if(isset($link['root']) && isset($link['target']) && !$exists) {
+                $req = true;
+                break;
+              }
+            }
+          }
+          // links not found. build at first stage
+          if(!$req) {
+            /*
+            if(!isset($sort_root[$rkey])) {
+              $rt = $root;
+              unset($rt['targets']);
+              $sort_root[$rkey]=$rt;
+            }
+            if(!isset($sort_root[$rkey]['targets'][$tkey])) {
+              $sort_root[$rkey]['targets'][$tkey] = $target;
+              $sort_cnt_targets++;
+              $sort_root[$rkey]['targets'][$tkey]['order'] = $order;
+            }//
+            $sort_cnt_targets++;
+            $sort_root[$rkey]['targets'][$tkey]['order'] = $order;
+          }
+        }
+      }
+      $order++;
+    }
+    var_dump(self::$roots);
+    * */
   }
   
   public function save_roots() {
@@ -161,6 +226,7 @@ class Build {
 			}
 		}
 	}
+  
 	public function getRootHomeDir($root_name) {
 		if(isset(self::$roots[$root_name][ 'home_dir'])) {
 			return self::$roots[$root_name][ 'home_dir'];
@@ -169,7 +235,8 @@ class Build {
 	}
 	
 	public function reg_target($target_name, $params) {
-	   $params['dir'] = substr($params['home_dir'], strlen(self::$roots[self::$current_root]['home_dir'])-strlen($params['home_dir']));
+     $rp = realpath($params['home_dir']);
+	   $params['dir'] = substr($rp, strlen(self::$roots[self::$current_root]['home_dir'])-strlen($rp));
 	   $params['short_name'] = $target_name;
      $src = array();
      foreach($params['src'] as $file) {
@@ -179,7 +246,7 @@ class Build {
 	   echo 'Target: '.$params['dir'].'//'.$target_name."\n";
 	   self::$roots[self::$current_root]['targets'][$params['dir'].'//'.$target_name] = $params;
 	}
-	
+
 	public function exec() {
 		//var_dump(self::$os_type);
 		//var_dump(self::$variant);
@@ -194,15 +261,13 @@ class Build {
 				
 				foreach(self::$platform as $pl) {
 					echo 'Platform: '.$pl."\n";
-					self::$buildinfo->set($os, $pl, $variant);
+					self::$buildinfo->set($os, $pl, $vardev);
 					
 					foreach(self::$roots as $rkey => $root) {
 						echo 'Root: '.$rkey."\n";
 						
 						foreach($root['targets'] as $tkey => $target) {
 						  echo 'Target: '.$tkey."\n";
-						  
-						  $cnt_files+=count($target['files']);
 
 						  $build_dir = self::$build_path.DIRECTORY_SEPARATOR.'build'.DIRECTORY_SEPARATOR.$os.DIRECTORY_SEPARATOR.$vardev.DIRECTORY_SEPARATOR.$pl;
               //mkdir($build_dir, 0777);
@@ -221,9 +286,30 @@ class Build {
 			}
 		}
 	}
-	
+
+	public function stat() {
+    $curTime = microtime(true);
+    self::$cnt_targets = 0;
+    self::$cnt_files = 0;
+    self::$cnt_lines = 0;
+    foreach(self::$roots as $rkey => $root) {
+      foreach($root['targets'] as $tkey => $target) {
+        self::$cnt_targets++;
+        self::$cnt_files+=count($target['src']);
+        foreach($target['src'] as $file) {
+          self::$cnt_lines+=Utils::getFileLines($file);
+        }
+      }
+    }
+    self::$time_work = round(microtime(true) - $curTime,3)*1000; 
+    echo 'Targets: '.self::$cnt_targets."\n";
+    echo 'Files: '.self::$cnt_files."\n";
+    echo 'Lines: '.self::$cnt_lines."\n";
+  }
+  
 	public function printTimers() {
 		echo 'Scan time: '.self::$time_scan.' ms'."\n";
+    echo 'Work time: '.self::$time_work.' ms'."\n";
     foreach(self::$tools as $tkey => $tool) {
       if(class_exists($tkey)) {
         if(method_exists($tkey, 'printTimers')) {
@@ -231,7 +317,6 @@ class Build {
         }
       }
     }
-    echo 'Work time: '.self::$time_work.' ms'."\n";
 	}
 	
 	public function setReleasePath($release_path) {

@@ -41,11 +41,22 @@ Build::get()->use_tool('wix', array(
  * 
  */
 
-Build::get()->find_roots(array(realpath(__DIR__.'/../../projects/')));
-Build::get()->save_roots();
-//Build::get()->load_roots();
-
-Build::get()->exec();
+switch($_GET['do']) {
+case 'rebuild':
+	Build::get()->find_roots(array(realpath(__DIR__.'/../../projects/')));
+	Build::get()->save_roots();
+	Build::get()->exec();
+	break;
+case 'build':
+	Build::get()->load_roots();
+	Build::get()->exec();
+	break;
+case 'stat':
+	Build::get()->find_roots(array(realpath(__DIR__.'/../../projects/')));
+	Build::get()->save_roots();
+	Build::get()->stat();
+	break;
+}
 
 Build::get()->printTimers();
 

@@ -10,13 +10,13 @@ class VCC130 {
 	private $tool_editbin = '';
 	private $tool_rc = '';
 	private $tool_mt = '';
-	private $tool_signtool = '';
+	private $tool_signtool = null;
 	private $bin_path = '';
 	private $sdk_bin_path = '';
 	private $include_path = array();
 	private $lib = array();
 	private $lib_path = array();
-	private $cflags = '/nologo /GS /GL /FS /analyze /W3 /Gy /Zc:wchar_t /Zi /Gm- /O2 /sdl /D "_UNICODE" /D "UNICODE" ';
+	private $cflags = '/nologo /GS /GL /FS /W3 /Gy /Zc:wchar_t /Zi /Gm- /O2 /sdl /D "_UNICODE" /D "UNICODE" ';
 	private $time_cl = 0;
 	private $time_link = 0;
 	private $env = array();
@@ -50,20 +50,20 @@ class VCC130 {
 			$this->include_path[] = $this->params['home_path'].DIRECTORY_SEPARATOR.'include';
 			$this->include_path[] = $this->params['home_path'].DIRECTORY_SEPARATOR.'atlmfc\include';
 			
-			$this->lib[] = $this->params['home_path'].DIRECTORY_SEPARATOR.'lib';
-			$this->lib[] = $this->params['home_path'].DIRECTORY_SEPARATOR.'atlmfc\lib';
 		}
 		if(isset($this->params['sdk_path'])) {
 			$this->sdk_bin_path = '';
+			
+			include 'cmd/signtool.php';
+			
 			if(Enviroment::getHostPlatform() == 'i386') {
 				$this->sdk_bin_path = $this->params['sdk_path'].DIRECTORY_SEPARATOR.'bin'.DIRECTORY_SEPARATOR.'x86'.DIRECTORY_SEPARATOR;
+				$tool_signtool = new SignTool($this->sdk_bin_path);
 				
-				$this->lib[] = $this->params['sdk_path'].DIRECTORY_SEPARATOR.'lib\winv6.3\um\x86';
 			}
 			if(Enviroment::getHostPlatform() == 'AMD64') {
 				$this->sdk_bin_path = $this->params['sdk_path'].DIRECTORY_SEPARATOR.'bin'.DIRECTORY_SEPARATOR.'x64'.DIRECTORY_SEPARATOR;
-				
-				$this->lib[] = $this->params['sdk_path'].DIRECTORY_SEPARATOR.'lib\winv6.3\um\x64';
+				$tool_signtool = new SignTool($this->sdk_bin_path);
 			}
 			$this->tool_rc  = $this->sdk_bin_path.'rc.exe';
 			$this->tool_mt  = $this->sdk_bin_path.'mt.exe';
@@ -74,16 +74,61 @@ class VCC130 {
 			$this->include_path[] = $this->params['sdk_path'].DIRECTORY_SEPARATOR.'include\um';
 			$this->include_path[] = $this->params['sdk_path'].DIRECTORY_SEPARATOR.'include\winrt';
 			
-			$this->lib[] = $this->params['sdk_path'].DIRECTORY_SEPARATOR.'References\CommonConfiguration\Neutral';
 			
 		}
 		$this->env['PATH'] .= self::add_env_path($this->bin_path);
 		$this->env['PATH'] .= self::add_env_path($this->sdk_bin_path);
 		$this->env['INCLUDE'] .= self::add_env_path($this->include_path);
-		$this->env['LIB'] .= self::add_env_path($this->lib);
-		$this->env['LIBPATH'] .= self::add_env_path($this->lib_path);
+		//$this->env['LIB'] .= self::add_env_path($this->lib);
+		//$this->env['LIBPATH'] .= self::add_env_path($this->lib_path);
 
 		//var_dump($this);
+	}
+	
+	private function initLibs($buildinfo) {
+		unset($this->lib);
+		$this->lib = array();
+		unset($this->lib_path);
+		$this->lib_path = array();
+		
+		//var_dump($buildinfo);
+		
+		if($buildinfo->getPlatform() == 'x32') {
+			$this->lib_path[] = $this->params['home_path'].DIRECTORY_SEPARATOR.'lib';
+			$this->lib_path[] = $this->params['home_path'].DIRECTORY_SEPARATOR.'atlmfc\lib';
+		}
+		if($buildinfo->getPlatform() == 'x64') {
+			$this->lib_path[] = $this->params['home_path'].DIRECTORY_SEPARATOR.'lib\amd64';
+			$this->lib_path[] = $this->params['home_path'].DIRECTORY_SEPARATOR.'atlmfc\lib\amd64';
+		}
+		if(isset($this->params['sdk_path'])) {
+			if($buildinfo->getPlatform() == 'x32') {
+				$this->lib_path[] = $this->params['sdk_path'].DIRECTORY_SEPARATOR.'lib\winv6.3\um\x86';
+			}
+			if($buildinfo->getPlatform() == 'x64') {
+				$this->lib_path[] = $this->params['sdk_path'].DIRECTORY_SEPARATOR.'lib\winv6.3\um\x64';
+			}
+			$this->lib_path[] = $this->params['sdk_path'].DIRECTORY_SEPARATOR.'References\CommonConfiguration\Neutral';
+		}
+		$this->env['LIB'] = self::add_env_path($this->lib_path);
+		$this->env['LIBPATH'] = self::add_env_path($this->lib_path);
+		
+		//var_dump($this->env);
+	}
+	
+	private function initIncludes($target) {
+		$inc = array();
+		$inc = array_merge($inc, $this->include_path);
+		$inc = array_merge($inc, $target['include']);
+		if(is_array($target['link'])) {
+			foreach($target['link'] as $link) {
+				if(isset($link['root']) && isset($link['target'])) {
+					$tg = Build::get()->getTarget($root, $target);
+					$inc = array_merge($inc, $tg['include']);
+				}
+			}
+		}
+		return $inc;
 	}
 	
 	public function static_lib($buildinfo, $build_dir, $target_name, &$target) {
@@ -96,17 +141,23 @@ class VCC130 {
 		$result = $build_dir.$target['dir'].DIRECTORY_SEPARATOR.$target['short_name'].'.lib';
 		echo 'result = '.$result."\n";
 		
-		$includes = '';
-		$includes.= self::make_include($this->include_path);
-		$includes.= self::make_include($target['include']);
+		$this->initLibs($buildinfo);
 		
-		$flags = $this->cflags. ' /c /D "_LIB" ';///EHsc /SUBSYSTEM:CONSOLE
-		if($buildinfo->getPlatform() == 'x32') $flags .= ' /MACHINE:X86 /D "WIN32" ';
-		if($buildinfo->getPlatform() == 'x64') $flags .= ' /MACHINE:X64 /D "_WIN64" ';
+		$inc = $this->initIncludes($target);
+		$includes = self::make_include($inc);
 		
-		if($buildinfo->getVariant() == 'develop') $flags .= ' /WX /D "NDEBUG" ';
-		if($buildinfo->getVariant() == 'production') $flags .= ' /WX /D "NDEBUG" ';
-		if($buildinfo->getVariant() == 'debug') $flags .= ' /Od /D "_DEBUG" ';
+		$flags = $this->cflags. ' /MT /c /D "_LIB"  ';// /SUBSYSTEM:CONSOLE
+
+		if($buildinfo->getPlatform() == 'x32') {
+			$flags .= ' /D "WIN32" '; ////MACHINE:X86 
+		}
+		if($buildinfo->getPlatform() == 'x64') {
+			$flags .= ' /D "_WIN64" /D "_AMD64" /D "_MBCS" /D "_LIB" ';///MACHINE:X64 
+		}
+		
+		if($buildinfo->getVariant() == 'develop') $flags .= ' /analyze /D "NDEBUG" ';
+		if($buildinfo->getVariant() == 'production') $flags .= ' /analyze- /D "NDEBUG" ';
+		if($buildinfo->getVariant() == 'debug') $flags .= ' /analyze /Od /D "_DEBUG" ';
 		
 		$cl_result = array();
 		foreach($target['src'] as $file) {
@@ -115,6 +166,7 @@ class VCC130 {
 			$extention  = Utils::getFileExtension($file);
 			$out = '';
 			//echo '++'.$b_dir."\n";
+			if($extention == 'def') $out = $filename_in;
 			if($extention == 'c')   $this->c2obj($b_dir, $filename_in, $flags, $includes, $out);
 			if($extention == 'cpp') $this->cpp2obj($b_dir, $filename_in, $flags, $includes, $out);
 			
@@ -126,15 +178,11 @@ class VCC130 {
 		Build::get()->execScripts();
 		$this->time_cl += round(microtime(true) - $curTime,3)*1000; 
 		
-		$this->obj2lib($buildinfo, $build_dir, self::file_list($cl_result), $libs, $target, $out);
+		$this->obj2lib($buildinfo, $build_dir.$target['dir'].DIRECTORY_SEPARATOR, self::file_list($cl_result), $libs, $target, $out);
+
 		$curTime = microtime(true);
 		Build::get()->execScripts();
 		$this->time_link += round(microtime(true) - $curTime,3)*1000; 
-/*
-		foreach($target['src'] as $file) {
-			$extention  = Utils::getFileExtension($file);
-			if($extention == 'obj') obj2lib($enviroment, $build_dir, $includes);
-		}*/
 		
 	}
 	
@@ -153,7 +201,7 @@ class VCC130 {
 		file_put_contents($filename_rsp, '/Tc"'.$file."\"\n".$flags."\n".$includes."\n".'/Fo:"'.$filename_out.'"');
 		
 		$cmd = 'cl.exe /nologo @"'.$filename_rsp.'"';
-		echo $cmd."\n";
+		//echo $cmd."\n";
 		Build::get()->addScript(array(  'home_dir' => $this->bin_path,
 										'script_name' => $cmd,
 										'env' => $this->env,
@@ -168,11 +216,11 @@ class VCC130 {
 		$filename_log = $build_dir.DIRECTORY_SEPARATOR.Utils::getFileName($file).'.log';
 		$filename_out = $build_dir.DIRECTORY_SEPARATOR.Utils::getFileName($file).'.obj';
 		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.Utils::getFileName($file).'.rsp';
-		
+		$flags.=' /EHsc ';
 		file_put_contents($filename_rsp, '/Tp"'.$file."\"\n".$flags."\n".$includes."\n".'/Fo:"'.$filename_out.'"');
 		
 		$cmd = 'cl.exe /nologo @"'.$filename_rsp.'"';
-		echo $cmd."\n";
+		//echo $cmd."\n";
 		Build::get()->addScript(array(  'home_dir' => $this->bin_path,
 										'script_name' => $cmd,
 										'env' => $this->env,
@@ -185,6 +233,32 @@ class VCC130 {
 	private function obj2lib($buildinfo, $build_dir, $files, $libs, &$target, &$out) {
 		$filename_log = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.log';
 		$filename_out = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.lib';
+		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.rsp';
+		
+		$flags = '/LTCG /SUBSYSTEM:CONSOLE ';///NODEFAULTLIB:LIBCMT 
+		// /MACHINE:{ARM|EBC|X64|X86}
+		// http://msdn.microsoft.com/ru-ru/library/9a89h429.aspx
+		if($buildinfo->getPlatform() == 'x32') $flags .= ' /SAFESEH /MACHINE:X86 ';
+		// http://msdn.microsoft.com/ru-ru/library/dn195771.aspx
+		if($buildinfo->getPlatform() == 'x64') $flags .= ' /HIGHENTROPYVA /MACHINE:X64 ';		
+		
+		file_put_contents($filename_rsp, $files.$flags."\n".$includes."\n".'/OUT:"'.$filename_out.'"');
+		
+		$cmd = 'link.exe /nologo @"'.$filename_rsp.'"';
+		echo $cmd."\n";
+		//var_dump($this->env);
+		Build::get()->addScript(array(  'home_dir' => $this->bin_path,
+										'script_name' => $cmd,
+										'env' => $this->env,
+										'log_file' => $filename_log
+										));
+												
+		$out = $filename_out;
+	}
+
+	private function obj2exe($buildinfo, $build_dir, $files, $libs, &$target, &$out) {
+		$filename_log = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.log';
+		$filename_out = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.exe';
 		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.rsp';
 		
 		$flags = '/LTCG ';
@@ -207,13 +281,54 @@ class VCC130 {
 		$out = $filename_out;
 	}
 
-	private function obj2dll($enviroment, $build_dir, $includes, $libs, &$out) {
+	private function obj2dll($buildinfo, $build_dir, $files, $libs, &$target, &$out) {
+		$filename_log = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.log';
+		$filename_out = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.dll';
+		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.rsp';
+		
+		$flags = '/LTCG ';
+		// /MACHINE:{ARM|EBC|X64|X86}
+		// http://msdn.microsoft.com/ru-ru/library/9a89h429.aspx
+		if($buildinfo->getPlatform() == 'x32') $flags .= ' /SAFESEH /MACHINE:X86 ';
+		// http://msdn.microsoft.com/ru-ru/library/dn195771.aspx
+		if($buildinfo->getPlatform() == 'x64') $flags .= ' /HIGHENTROPYVA /MACHINE:X64 ';		
+		
+		file_put_contents($filename_rsp, $files.$flags."\n".$includes."\n".'/OUT:"'.$filename_out.'"');
+		
+		$cmd = 'link.exe /nologo @"'.$filename_rsp.'"';
+		echo $cmd."\n";
+		Build::get()->addScript(array(  'home_dir' => $this->bin_path,
+										'script_name' => $cmd,
+										'env' => $this->env,
+										'log_file' => $filename_log
+										));
+												
+		$out = $filename_out;
 	}
-
-	private function obj2exe($enviroment, $build_dir, $includes, $libs, &$out) {
-	}
-
-	private function obj2sys($enviroment, $build_dir, $includes, $libs, &$out) {
+		
+	private function obj2sys($buildinfo, $build_dir, $files, $libs, &$target, &$out) {
+		$filename_log = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.log';
+		$filename_out = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.dll';
+		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.rsp';
+		
+		$flags = '/LTCG ';
+		// /MACHINE:{ARM|EBC|X64|X86}
+		// http://msdn.microsoft.com/ru-ru/library/9a89h429.aspx
+		if($buildinfo->getPlatform() == 'x32') $flags .= ' /SAFESEH /MACHINE:X86 ';
+		// http://msdn.microsoft.com/ru-ru/library/dn195771.aspx
+		if($buildinfo->getPlatform() == 'x64') $flags .= ' /HIGHENTROPYVA /MACHINE:X64 ';		
+		
+		file_put_contents($filename_rsp, $files.$flags."\n".$includes."\n".'/OUT:"'.$filename_out.'"');
+		
+		$cmd = 'link.exe /nologo @"'.$filename_rsp.'"';
+		echo $cmd."\n";
+		Build::get()->addScript(array(  'home_dir' => $this->bin_path,
+										'script_name' => $cmd,
+										'env' => $this->env,
+										'log_file' => $filename_log
+										));
+												
+		$out = $filename_out;
 	}
 
 	private static function make_include($includes) {
