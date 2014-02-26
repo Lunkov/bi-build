@@ -26,6 +26,7 @@ class ProcessManager {
 				$this->running[] = new Process($this->scripts[$i]);
 				$this->processesRunning++;
 				$i++;
+				Build::get()->incTask();
 			}
         
 			// Check if done
@@ -44,8 +45,20 @@ class ProcessManager {
 					else {
 						echo "Killed: ".$val->getScript()."\n";
 					}
-					echo $val->getOutput();
+					$out = $val->getOutput();
+					echo $out;
 					echo $val->getError();
+					if(is_array($out)) {
+						foreach($out as $str) {
+							if(stripos($str, ' warning ') > 0) Build::get()->incWarning();
+							if(stripos($str, ' error ') > 0)   Build::get()->incError();
+						}
+					}
+					if(is_string($out)) {
+						Build::get()->incWarning(substr_count($out, ' warning '));
+						Build::get()->incError(substr_count($out, ' error '));
+					}
+					
 					$val->close();
 					unset($this->running[$key]);
 					$this->processesRunning--;

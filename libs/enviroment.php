@@ -2,10 +2,10 @@
 
 class Enviroment {
 	
-	public static function getHostOS() {
+	public static function getOS() {
 		return $_SERVER['OS'];
 	}
-	public static function getHostPlatform() {
+	public static function getPlatform() {
 		return $_SERVER['PROCESSOR_ARCHITEW6432'];
 	}
 	public static function getTemp() {
