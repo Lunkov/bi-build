@@ -9,10 +9,14 @@ class Utils {
 	static public function getFileLines($filename) {
 		$lines = 0;
 		$f = fopen($filename, 'rb');
-		while (!feof($f)) {
-			$lines += substr_count(fread($f, 8192), "\n");
+		if(is_resource($f)) {
+			while (!feof($f)) {
+				$lines += substr_count(fread($f, 8192), "\n");
+			}
+			fclose($f);
+		} else {
+			echo "ERROR: File '$filename' not found\n";
 		}
-		fclose($f);
 		return $lines;
 	}
 	

@@ -124,7 +124,7 @@ class Build {
 				while (false !== ($entry = readdir($handle))) {
 					if ($entry != "." && $entry != "..") {
 						if (in_array(basename($entry), $display)) {
-						  echo 'include: '.$entry . "\n";
+						  //echo 'include: '.$entry . "\n";
 						  include($source.DIRECTORY_SEPARATOR.$entry);
 						}			
 					}
@@ -224,14 +224,14 @@ class Build {
           if(!$req) {
 						$path = BuildUtils::make_target_path($rkey, $tkey);
 						if(!isset(self::$order_roots[$path])) {
-							self::$order_roots[$path] = $order;
+							self::$order_roots[$path]['order'] = $order;
 						}
           }
         }
       }
       $order++;
     }
-    var_dump(self::$order_roots);
+    //var_dump(self::$order_roots);
     if(self::$cnt_targets!=count(self::$order_roots)) {
 			echo "===========!!! ERROR !!!==========\n";
       echo 'Scan targets: '.self::$cnt_targets."\n";
@@ -243,7 +243,7 @@ class Build {
 							if(!isset(self::$roots[$link['root']]['targets'][$link['target']])) {
 								$path1 = BuildUtils::make_target_path($rkey, $tkey);
 								$path2 = BuildUtils::make_target_path($link['root'], $link['target']);
-								echo 'Target \''.$path2.'\' not found in \''.$path1."'\n";
+								echo 'Target \''.$path2.'\' not found (by \''.$path1."')\n";
               }
             }
           }
@@ -278,7 +278,7 @@ class Build {
 			  $it = new RecursiveDirectoryIterator($params['home_dir'].DIRECTORY_SEPARATOR.$source);
 			  foreach(new RecursiveIteratorIterator($it) as $file) {
           if (in_array(basename($file), $display)) {
-            echo 'include: '.$file . "\n";
+            //echo 'include: '.$file . "\n";
             include($file);
           }
 			  }
@@ -312,7 +312,7 @@ class Build {
 	public function reg_unit_test($test_name, $params) {
      $params['make'] = 'console_exe';
      $params['utest'] = true;
-     self::reg_target($target_name, $params);
+     self::reg_target('unit_test_'.$test_name, $params);
 	}
   
 	public function getTarget($root, $target) {
@@ -327,6 +327,18 @@ class Build {
 		return array('root' =>$root, 'target'=>$target);
 	}
   
+  public function setResult($target, $result) {
+		self::$order_roots[$target]['result'] = $result;
+		//var_dump(self::$order_roots);
+	}
+
+  public function getResult($target) {
+		if(isset(self::$order_roots[$target]['result'])) {
+			return self::$order_roots[$target]['result'];
+		}
+		return null;
+	}
+	
 	private function build() {
 		//var_dump(self::$os_type);
 		//var_dump(self::$variant);
@@ -367,6 +379,7 @@ class Build {
 							echo 'ERROR: Tool \''.$tg['tool']."' not found\n";
 						}
 					}
+					echo 'RESULT='.self::$order_roots[$key]['result']."\n";
 					
 					/*
 					foreach(self::$roots as $rkey => $root) {
@@ -466,6 +479,7 @@ class Build {
       }
     }
     self::$time_work = round(microtime(true) - $curTime,3)*1000; 
+    echo "============================================\n";
     echo 'Targets: '.self::$cnt_targets."\n";
     echo 'Files: '.self::$cnt_files."\n";
     echo 'Lines: '.self::$cnt_lines."\n";
@@ -473,6 +487,7 @@ class Build {
   
 	private function print_timers() {
     echo "============================================\n";
+    echo 'Targets: '.self::$cnt_targets."\n";
 		echo 'Tasks: '.(self::$cnt_tasks)."\n";
     echo 'Erros: '.(self::$cnt_errors)."\n";
     echo 'Warnings: '.(self::$cnt_warnings)."\n";
@@ -486,6 +501,7 @@ class Build {
         }
       }
     }
+    echo "============================================\n";
 	}
 	private function clear() {
 		rmdir(self::$build_path);

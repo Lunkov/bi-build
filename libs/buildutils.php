@@ -56,4 +56,17 @@ class BuildUtils {
     return $ret;
   }
 
+	public static function array2string($data, $str_begin, $str_end) {
+		$ret = '';
+		if(is_array($data)) {
+			foreach($data as $p) {
+				$ret.=$str_begin.$p.$str_end;
+			}
+		}
+		if(is_string($data)) {
+			$ret.=$str_begin.$data.$str_end;
+		}
+		return $ret;
+	}
+
 }

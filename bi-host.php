@@ -37,6 +37,10 @@ Build::get()->use_tool('wix', array(
 						'home_path' => 'C:\Program Files (x86)\WiX Toolset v3.8',
 						));
 
+$link_unit_test  = array( 	Build::get()->link2Target('atlansys-ess', '\src\libs\test_engine@test_engine'),
+							Build::get()->link2Target('atlansys-ess', '\src\libs\test_env@test_env'),
+				);
+				
 /*
  * Execute
  * 
