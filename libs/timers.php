@@ -44,7 +44,7 @@ class Timers {
       self::$timers[$timer] = 0;
     }
     //self::$timers[$timer] += round(microtime(true) - self::$start_timers[$timer], 3)*1000;
-    self::$timers[$timer] += bcsub(microtime(true), self::$start_timers[$timer], 6);
+    self::$timers[$timer] += bcsub(microtime(true), self::$start_timers[$timer], 16);
     unset(self::$start_timers[$timer]);
   }
 
@@ -53,7 +53,7 @@ class Timers {
       if(!isset(self::$timers[$key])) continue;
       $timer_desc = $key;
       if(isset(self::$timers_desc[$key])) $timer_desc = self::$timers_desc[$key];
-      echo $timer_desc. ': '.date("H:i:s", self::$timers[$key]).' ('.self::$timers[$key].")\n";
+      echo $timer_desc. ': '.gmdate("H:i:s", self::$timers[$key])."\n";
     }
   }
 }
