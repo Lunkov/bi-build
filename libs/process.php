@@ -5,10 +5,10 @@ class ProcessManager {
     private $processesRunning = 0;
     private $processes = 2;
     private $running = array();
-    private $sleep_time = 2;
+    private $sleep_time = 1;
     
     public function __construct() {
-		$this->processes = Enviroment::getProcCount();
+		$this->processes = Enviroment::getProcCount() * 2;
 	}
 	
     function addScript($params) {
@@ -48,17 +48,27 @@ class ProcessManager {
 					$out = $val->getOutput();
 					echo $out;
 					echo $val->getError();
+					$ok = true;
 					if(is_array($out)) {
 						foreach($out as $str) {
-							if(stripos($str, ' warning ') > 0) Build::get()->incWarning();
-							if(stripos($str, ' error ') > 0)   Build::get()->incError();
+							if(stripos($str, ': warning ') > 0) Build::get()->incWarning();
+							if(stripos($str, ': error ') > 0) {
+								$ok = false;
+								Build::get()->incError();
+							}
 						}
 					}
 					if(is_string($out)) {
 						Build::get()->incWarning(substr_count($out, ' warning '));
-						Build::get()->incError(substr_count($out, ' error '));
+						$errors = substr_count($out, ' error ');
+						if($errors>0) {
+							$ok = false;
+							Build::get()->incError($errors);
+						}
 					}
-					
+					if($ok) {
+						Build::get()->incOK();
+					}
 					$val->close();
 					unset($this->running[$key]);
 					$this->processesRunning--;

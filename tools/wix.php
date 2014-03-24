@@ -5,7 +5,6 @@ class WiX {
 	const CANDLE_EXE = 'candle.exe';
 	private $flags = '/nologo -ext WixDifxAppExtension -ext WixUtilExtension ';
 	private $params;
-	private $time_work = 0;
 	private $tool_candle = '';
 	
 	function init($params) {
@@ -26,13 +25,12 @@ class WiX {
 			//$filename_in = $target['home_dir'].DIRECTORY_SEPARATOR.$file;
 			$filename_in = $file;
 			$extention  = Utils::getFileExtension($file);
-			$out = '';
 			//echo '++'.$b_dir."\n";
-			if($extention == 'wxs') $this->wxx2wixobj($b_dir, $filename_in, $flags, $includes, $out);
-			if($extention == 'wxl') $this->wxx2wixobj($b_dir, $filename_in, $flags, $includes, $out);
-			
-			if(strlen($out)>0) {
-				$cl_result[] = $out;
+			switch($extention) {
+			case 'wxs':
+			//case 'wxl':
+					$cl_result[] = $this->wxx2wixobj($buildinfo, $b_dir, $filename_in, $flags, $includes);
+					break;
 			}
 		}
 		$curTime = microtime(true);
@@ -41,7 +39,7 @@ class WiX {
 		
 	}
 	
-	private function wxx2wixobj($build_dir, $file, $flags, $includes, &$out) {
+	private function wxx2wixobj($buildinfo, $build_dir, $file, $flags, $includes) {
 
 		$filename_log = $build_dir.DIRECTORY_SEPARATOR.Utils::getFileName($file).'.log';
 		$filename_out = $build_dir.DIRECTORY_SEPARATOR.Utils::getFileName($file).'.wix_obj';
@@ -49,7 +47,18 @@ class WiX {
 		
 		file_put_contents($filename_rsp, '"'.$file."\"\n".$flags."\n");
 		
-		$cmd = 'candle.exe /nologo @"'.$filename_rsp.'"';
+    if($buildinfo->getPlatform() == 'x32') {
+      $flags .= ' -dADDRESS_MODEL=$(32)';
+    }
+    if($buildinfo->getPlatform() == 'x64') {
+      $flags .= ' -dADDRESS_MODEL=$(64)';
+    }
+    $flags .= ' -dProcessorArchitecture=$('.$buildinfo->getPlatform().')';
+    $flags .= ' -ext WixIISExtension -ext WixDifxAppExtension -ext WixUtilExtension -nologo';
+    
+    //-dVERSION=$(VERSION) -dLANGUAGE=$(LANGUAGE)  -out $(1) $(2)
+    
+		$cmd = 'candle.exe '.$flags.' -out "'.$filename_out.'" "'.$file.'"';
 		echo $cmd."\n";
 		Build::get()->addScript(array(  'home_dir' => $this->bin_path,
 										'script_name' => $cmd,
@@ -57,7 +66,7 @@ class WiX {
 										'log_file' => $filename_log
 										));
 		
-		$out = $filename_out;
+		return $filename_out;
 	}
 		
 	public function wxs($buildinfo, $build_dir, $target_name, &$target) {
@@ -67,8 +76,8 @@ class WiX {
 			$extention  = Utils::getFileExtension($file);
 			$out = '';
 			//echo '++'.$b_dir."\n";
-			if($extention == 'wxs') $this->wxx2wixobj($b_dir, $filename_in, $flags, $includes, $out);
-			if($extention == 'wxl') $this->wxx2wixobj($b_dir, $filename_in, $flags, $includes, $out);
+			if($extention == 'wxs') $this->wxx2wixobj($buildinfo, $b_dir, $filename_in, $flags, $includes, $out);
+			//if($extention == 'wxl') $this->wxx2wixobj($buildinfo, $b_dir, $filename_in, $flags, $includes, $out);
 			
 			if(strlen($out)>0) {
 				$cl_result[] = $out;
@@ -79,10 +88,4 @@ class WiX {
 		$this->time_work += round(microtime(true) - $curTime,3)*1000; 		
 	}
 	
-	public function printTimers() {
-		echo "==========\n";
-		echo 'Tool: '.__CLASS__."\n";
-		echo 'Work time: '.$this->time_work.' ms'."\n";
-		echo "==========\n";
-	}	
 }

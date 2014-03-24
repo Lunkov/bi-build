@@ -1,25 +1,41 @@
 <?
 
 class BuildUtils {
-  const ROOT_SEPARATOR   = ':';
+	// Format full target name is "project:target@short_name"
+  const PROJECT_SEPARATOR   = ':';
   const TARGET_SEPARATOR = '@';
 
-  public static function make_target_path($root, $target) {
-		return $root . self::ROOT_SEPARATOR . $target;
+	/*
+	 * Make full name of target
+	 * $project - project name of target ( project )
+	 * $target  - name of target ( target@short_name )
+	 * */	
+	public static function makeTargetPath($project, $target) {
+		return $project . self::PROJECT_SEPARATOR . $target;
 	}
-	public static function get_root_name($path) {
+	
+	/*
+	 * Get project name from target name
+	 * $targetname - full name of target ( project:target@short_name )
+	 * */	
+	public static function getProjectName($targetname) {
 		$ret = '';
-		$pos = strpos($path, self::ROOT_SEPARATOR);
+		$pos = strpos($targetname, self::PROJECT_SEPARATOR);
 		if($pos > 1) {
-			$ret = substr($path, 0, $pos);
+			$ret = substr($targetname, 0, $pos);
 		}
 		return $ret;
 	}
-	public static function get_target_name($path) {
+	
+	/*
+	 * Get target name without project name
+	 * $targetname - full name of target ( project:target@short_name )
+	 * */	
+	public static function getTargetName($targetname) {
 		$ret = '';
-		$pos = strpos($path, self::ROOT_SEPARATOR);
+		$pos = strpos($targetname, self::PROJECT_SEPARATOR);
 		if($pos > 1) {
-			$ret = substr($path, $pos+1, strlen($path)-1);
+			$ret = substr($targetname, $pos+1, strlen($targetname)-1);
 		}
 		return $ret;
 	}
@@ -28,7 +44,8 @@ class BuildUtils {
     $ret = array();
     if(is_array($pathes)) {
       foreach($pathes as $include) {
-        $pos = strpos($include, self::ROOT_SEPARATOR);
+				//var_dump($include);
+        $pos = strpos($include, self::PROJECT_SEPARATOR);
         if($pos > 1) {
           $in = '';
           $rkey = substr($include, 0, $pos);
@@ -56,6 +73,12 @@ class BuildUtils {
     return $ret;
   }
 
+	/*
+	 * Convert array to string
+	 * $data - array of strings
+	 * $str_begin - separator before value of string
+	 * $str_end - separator after value of string
+	 * */	
 	public static function array2string($data, $str_begin, $str_end) {
 		$ret = '';
 		if(is_array($data)) {

@@ -17,8 +17,10 @@ class SignTool {
 		$flags = 'sign ';
 		switch(Utils::getFileExtension($file)) {
 		case 'sys':
+        $flags .= ' /ph ';
 				break;
 		case 'cat':
+        $flags .= ' /a ';
 				break;
 		case 'dll':
 				break;

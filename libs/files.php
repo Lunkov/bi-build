@@ -16,13 +16,11 @@ class Files {
 	}
 
   public function saveState($filename) {
-    file_put_contents($filename, json_encode($this->hashes_files_new));
+    Utils::saveState($filename, $this->hashes_files_new);
   }
 
   public function loadState($filename) {
-    if(!file_exists($filename)) return;
-    $str = file_get_contents($filename);
-    $this->hashes_files_old = json_decode($str);
+    $this->hashes_files_old = Utils::loadState($filename);
   }
   
   private function setHashes($rt) {
