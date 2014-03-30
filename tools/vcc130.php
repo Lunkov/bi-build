@@ -1,6 +1,7 @@
-<?
+<?php
 
 class VCC130 {
+  private $tool_inf2cat = '';
 	private $tool_cl = '';
 	private $tool_ml = '';
 	private $tool_lib = '';
@@ -55,6 +56,7 @@ class VCC130 {
 			}
 			$this->tool_rc  = $this->sdk_bin_path.'rc.exe';
 			$this->tool_mt  = $this->sdk_bin_path.'mt.exe';
+      $this->tool_inf2cat = $this->params['sdk_path'].DIRECTORY_SEPARATOR.'bin'.DIRECTORY_SEPARATOR.'x86'.DIRECTORY_SEPARATOR.'inf2cat.exe';
 
 			$this->include_path[] = $this->params['sdk_path'].DIRECTORY_SEPARATOR.'Include';
 			$this->include_path[] = $this->params['sdk_path'].DIRECTORY_SEPARATOR.'Include\api';
@@ -232,23 +234,23 @@ class VCC130 {
 		$flags = $this->cflags. $cflags. ' /D_USING_V110_SDK71_ /D_CRT_SECURE_NO_WARNINGS /c /D_LIB /D__MSVCRT_VERSION__=0x0601 /DWINVER=0x501  /D_WIN32_WINNT=0x501 ';// /SUBSYSTEM:CONSOLE
 
 		if($buildinfo->getPlatform() == 'x32') {
-			$flags .= ' /DWIN32 /D_X86_ '; ////MACHINE:X86 
+			$flags .= ' /DWIN32 /D_X86_ /Di386 '; ////MACHINE:X86 
 		}
 		if($buildinfo->getPlatform() == 'x64') {
-			$flags .= ' /D_WIN64 /D_AMD64_ /D_MBCS /D_LIB ';//:X64 
+			$flags .= ' /D_WIN64 /D_AMD64_ /DAMD64 /D_MBCS /D_LIB ';//:X64 
 		}
 		if($buildinfo->getPlatform() == 'ia64') {
 			$flags .= ' /D_IA64 /D_IA64_ /D_MBCS /D_LIB ';//:IA64 
 		}
 		
 		if($buildinfo->getVariant() == 'develop') {
-			$flags .= ' /MT /analyze /DNDEBUG /DVLOG_ENABLE ';
+			$flags .= ' /MT /analyze- /DNDEBUG /DVLOG_ENABLE ';
 		}
 		if($buildinfo->getVariant() == 'production') {
 			$flags .= ' /MT /analyze- /DNDEBUG ';
 		}
 		if($buildinfo->getVariant() == 'debug') {
-			$flags .= ' /MTd /analyze /Od /D_DEBUG /DASSERT_ENABLE /DVLOG_ENABLE ';
+			$flags .= ' /MTd /analyze- /Od /D_DEBUG /DASSERT_ENABLE /DVLOG_ENABLE ';
 		}
 		
 		$cl_result = array();
@@ -393,13 +395,30 @@ class VCC130 {
 				
 		$this->initLibs($buildinfo);
 		
-		$cl_result = $this->compile($buildinfo, $build_dir, $target_name, ' /DMSVS_TEST_DRV /DSECURITY_KERNEL /DNTDDI_VERSION=NTDDI_WINXPSP3 /D_WIN2K_COMPAT_SLIST_USAGE ', $target); 
+		$cl_result = $this->compile($buildinfo, $build_dir, $target_name, ' /hotpatch /kernel /DMSVS_TEST_DRV /DSECURITY_KERNEL /DNTDDI_VERSION=NTDDI_WINXPSP3 /D_WIN2K_COMPAT_SLIST_USAGE ', $target); 
 		
     Timers::get()->start('vcc.link');
 		$link_result = $this->obj2sys($buildinfo, $build_dir.$target['dir'].DIRECTORY_SEPARATOR, self::file_list($cl_result), $libs, $target);
 		Build::get()->execScripts();
 		Timers::get()->stop('vcc.link');
 		
+    $b_dir = $build_dir.$target['dir'].DIRECTORY_SEPARATOR.'.signdrv';
+    Utils::rmdir($b_dir);
+    $b_dir = Utils::mkdir($b_dir);
+    copy($result, $b_dir.DIRECTORY_SEPARATOR.Utils::getBaseName($result));
+    $inf_file = BuildUtils::getFileByExt($target['src'], 'inf');
+    if(isset($inf_file)) {
+      copy($inf_file, $b_dir.DIRECTORY_SEPARATOR.Utils::getBaseName($inf_file));
+    }
+    $sign = new SignTool();
+    $sign->init(array(
+                  'home_dir' => $this->sdk_bin_path,
+                  'sign' => (isset($target['sign'])?$target['sign']:null),
+                ));
+    $sign->sign($b_dir.DIRECTORY_SEPARATOR.Utils::getBaseName($result));
+    $cmd = 'call "'.$this->tool_inf2cat.'" /os:Server2008R2_X64,Server2008_X64,Server2003_X64,XP_X64,Vista_X64,7_X64,8_X64,Server8_X64 /driver:"'.$b_dir.'"';
+    Build::get()->execScript($cmd);
+    $sign->sign($b_dir.DIRECTORY_SEPARATOR.Utils::getFileName($result).'.cat');
     
 		//Build::get()->setResult($target_name, $link_result);
 
@@ -467,12 +486,21 @@ class VCC130 {
 		$filename_log = $fn.'.log';
 		$filename_out = $fn.'.res';
 		$filename_rsp = $fn.'.rsp';
+    
+    //unlink($filename_out);
 
-		$flags =' /DA_VERSION_MAJOR=7 /DA_VERSION_MINOR=9 /DA_VERSION_BUILD=0 /DA_SVN_REV=0 ';
+		$flags =' /dBI_VERSION_MAJOR="'.Vars::get()->getVar('info.version.major').'"';
+    $flags .=' /dBI_VERSION_MINOR="'.Vars::get()->getVar('info.version.minor').'"';
+    $flags .=' /dBI_VERSION_BUILD="'.Vars::get()->getVar('info.version.build').'"';
+    $flags .=' /dBI_SVN_REV="'.Vars::get()->getVar('info.revision').'"';
+    $flags .=' /dBI_RC_COPYRIGHT="\"'.Vars::get()->getVar('info.copyright').'\""';
+    $flags .=' /dBI_RC_COMPANY_NAME="\"'.Vars::get()->getVar('info.companyname').'\""';
+    $flags .=' ';
+    
 		//file_put_contents($filename_rsp, '/Tp"'.$file."\"\n".$flags."\n".$includes."\n".'/Fo:"'.$filename_out.'"');
 		
 		//$cmd = $this->tool_rc.' /nologo @"'.$filename_rsp.'"';
-    $cmd = $this->tool_rc.' /nologo -l 0x409 '.$flags.' /I"C:\tools\SDK\8.1\Include\api" /v /fo "'.$filename_out.'" "'.$file.'"';
+    $cmd = $this->tool_rc.' /nologo /r /l 0x409 '.$flags.' /i"C:\tools\SDK\8.1\Include\api" /v /fo "'.$filename_out.'" "'.$file.'"';
 		//echo $cmd."\n";
 		Build::get()->addScript(array(  'home_dir' => $this->sdk_bin_path,
 										'script_name' => $cmd,
@@ -542,7 +570,7 @@ class VCC130 {
 		$filename_out = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.exe';
 		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.rsp';
 		
-		$flags = '/LTCG ';
+		$flags = '/LTCG /SUBSYSTEM:CONSOLE ';
 		// /MACHINE:{ARM|EBC|X64|X86}
 		// http://msdn.microsoft.com/ru-ru/library/9a89h429.aspx
 		if($buildinfo->getPlatform() == 'x32') $flags .= ' /SAFESEH /MACHINE:X86 ';
@@ -595,13 +623,19 @@ class VCC130 {
 		$filename_out = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.sys';
 		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.rsp';
 		
-		$flags = ' /RELEASE /kernel /OPT:REF /OPT:ICF /MERGE:_PAGE=PAGE /MERGE:_TEXT=.text /SECTION:INIT,d  /INTEGRITYCHECK /LTCG  /SUBSYSTEM:WINDOWS /EHsc fltMgr.lib ntstrsafe.lib kernl32p.lib wdmsec.lib BufferOverflowK.lib ntoskrnl.lib hal.lib wmilib.lib ';
+    // /OPT:REF /OPT:ICF   /INTEGRITYCHECK 
+		$flags  = ' /RELEASE /kernel /driver /LTCG';
+    $flags .= ' /MERGE:_PAGE=PAGE /MERGE:_TEXT=.text /SECTION:INIT,d /STACK:0x40000,0x1000';
+    $flags .= ' /base:0x10000 /SUBSYSTEM:NATIVE';
+    $flags .= ' /MANIFEST:NO /NODEFAULTLIB';
+    $flags .= ' fltMgr.lib ntstrsafe.lib kernl32p.lib wdmsec.lib BufferOverflowK.lib ntoskrnl.lib hal.lib wmilib.lib ';
 		// /MACHINE:{ARM|EBC|X64|X86}
 		// http://msdn.microsoft.com/ru-ru/library/9a89h429.aspx
-		if($buildinfo->getPlatform() == 'x32') $flags .= ' /SAFESEH /MACHINE:X86 /align:0x80 /functionpadmin:5 /entry:GsDriverEntry@8 ';
+		if($buildinfo->getPlatform() == 'x32')  $flags .= ' /MACHINE:X86 /SAFESEH /align:0x80 /functionpadmin:5 /entry:GsDriverEntry@8 ';
 		// http://msdn.microsoft.com/ru-ru/library/dn195771.aspx
-		if($buildinfo->getPlatform() == 'x64') $flags .= ' /HIGHENTROPYVA /MACHINE:X64 /functionpadmin:6 /entry:GsDriverEntry ';		
-    if($buildinfo->getPlatform() == 'arm') $flags .= ' /MACHINE:ARM ';
+		if($buildinfo->getPlatform() == 'x64')  $flags .= ' /MACHINE:X64 /HIGHENTROPYVA /functionpadmin:6 /entry:GsDriverEntry ';		// 
+    if($buildinfo->getPlatform() == 'arm')  $flags .= ' /MACHINE:ARM /FUNCTIONPADMIN ';
+    if($buildinfo->getPlatform() == 'ia64') $flags .= ' /MACHINE:IA64 /FUNCTIONPADMIN:16 ';
 		$depends = self::file_list($this->initDepends($target));
 		file_put_contents($filename_rsp, $files.$flags."\n".$includes."\n".$depends."\n".'/OUT:"'.$filename_out.'"');
 		

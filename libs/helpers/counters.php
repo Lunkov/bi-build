@@ -1,4 +1,4 @@
-<?
+<?php
 
 class Counters {
 	// Instance of singleton class

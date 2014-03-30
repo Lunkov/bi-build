@@ -26,7 +26,7 @@ class Vars {
     self::$vars[$var] = $value;
   }
 
-  public function getVar($var, $value) {
+  public function getVar($var) {
     if(!isset(self::$vars[$var])) return null;
     return self::$vars[$var];
   }

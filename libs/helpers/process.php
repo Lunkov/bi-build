@@ -1,4 +1,4 @@
-<?
+<?php
 
 class ProcessManager {
     private $scripts = array();

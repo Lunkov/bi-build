@@ -1,4 +1,4 @@
-<?
+<?php
 
 class BuildUtils {
 	// Format full target name is "project:target@short_name"
@@ -90,6 +90,22 @@ class BuildUtils {
 			$ret.=$str_begin.$data.$str_end;
 		}
 		return $ret;
+	}
+
+	public static function getFileByExt($data, $ext) {
+		if(is_array($data)) {
+			foreach($data as $file) {
+        if(Utils::getFileExtension($file) == $ext) {
+          return $file;
+        }
+			}
+		}
+		if(is_string($data)) {
+        if(Utils::getFileExtension($data) == $ext) {
+          return $data;
+        }
+		}
+		return null;
 	}
 
 }

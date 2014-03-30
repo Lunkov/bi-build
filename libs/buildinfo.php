@@ -1,4 +1,4 @@
-<?
+<?php
 
 class BuildInfo {
 	//private const VARIANT    = array('develop', 'production', 'debug');
@@ -38,9 +38,9 @@ class BuildInfo {
   public function checkBuild($key) {
     $good = 0;
     $ar_key = explode('.', $key);
-    if(isset($ar_key[0]) && ($ar_key[0] == '*' || $ar_key[0] == $this->getVariant())) $good++;
-    if(isset($ar_key[1]) && ($ar_key[1] == '*' || $ar_key[1] == $this->getOS())) $good++;
-    if(isset($ar_key[2]) && ($ar_key[2] == '*' || $ar_key[2] == $this->getPlatform())) $good++;    
+    if(isset($ar_key[0]) && ($ar_key[0] == '*' || $ar_key[0] == $this->getVariant())) { $good++; }
+    if(isset($ar_key[1]) && ($ar_key[1] == '*' || $ar_key[1] == $this->getOS()))  { $good++; }
+    if(isset($ar_key[2]) && ($ar_key[2] == '*' || $ar_key[2] == $this->getPlatform())) { $good++; }
     return 3 == $good;
   }
 }
