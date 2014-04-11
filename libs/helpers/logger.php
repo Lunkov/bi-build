@@ -26,9 +26,11 @@ class Logger {
 	private static $instance;
   
   private static $level;
+  private static $show_level = false;
+  private static $show_time = false;
 
 	private function __construct() {
-    $this->level = self::Warning;
+    self::$level = self::Warning;
 	}
 
   public static function get()
@@ -47,10 +49,27 @@ class Logger {
   public function setLevel($level) {
     self::$level = $level;
   }
+  public function showLevel($show_level) {
+    self::$show_level = $show_level;
+  }
+  public function showTime($show_time) {
+    self::$show_time = $show_time;
+  }
   
   public function out($level, $format, $args = []) {
     if($level > self::$level) { return; }
-    vprintf(self::$strSeverity[$level].': '.$format."\n", $args);
+    if(self::$show_time) {
+      echo date('H:i:s').': ';
+    }
+    if(self::$show_level) {
+      echo self::$strSeverity[$level].': ';
+    }
+    if(is_array($args) && count($args)>0) {
+      vprintf($format, $args);
+    } else {
+      echo $format;
+    }
+    echo "\n";
   }
   
 }

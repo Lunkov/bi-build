@@ -1,4 +1,4 @@
-<?
+<?php
 
 class Timers {
 	// Instance of singleton class
@@ -31,8 +31,9 @@ class Timers {
   }
 
   public function start($timer) {
-    if(!isset(self::$start_timers[$timer]))
+    if(!isset(self::$start_timers[$timer])) {
       self::$start_timers[$timer] = microtime(true);
+    }
   }
 
   public function stop($timer) {
@@ -50,9 +51,13 @@ class Timers {
 
   public function printAll() {
     foreach(self::$timers as $key => $val) {
-      if(!isset(self::$timers[$key])) continue;
+      if(!isset(self::$timers[$key])) {
+        continue;
+      }
       $timer_desc = $key;
-      if(isset(self::$timers_desc[$key])) $timer_desc = self::$timers_desc[$key];
+      if(isset(self::$timers_desc[$key])) {
+        $timer_desc = self::$timers_desc[$key];
+      }
       echo $timer_desc. ': '.gmdate("H:i:s", self::$timers[$key])."\n";
     }
   }

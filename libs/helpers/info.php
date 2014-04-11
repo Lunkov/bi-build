@@ -1,21 +1,21 @@
-<?
+<?php
 
 class Info {
 
 	static public function getHostName() {
-		return $_SERVER['COMPUTERNAME'];
+		return filter_input(INPUT_SERVER, 'COMPUTERNAME');
 	}
 	static public function getOS() {
-		return $_SERVER['OS'];
+		return filter_input(INPUT_SERVER, 'OS');
 	}
 	static public function getUserName() {
-		return $_SERVER['USERNAME'];
+		return filter_input(INPUT_SERVER, 'USERNAME');
 	}
 	static public function getUserDomain() {
-		return $_SERVER['USERDOMAIN'];
+		return filter_input(INPUT_SERVER, 'USERDOMAIN');
 	}
 	static public function getPlatform() {
-		return $_SERVER['PROCESSOR_ARCHITEW6432'];
+		return filter_input(INPUT_SERVER, 'PROCESSOR_ARCHITEW6432');
 	}
 }
 

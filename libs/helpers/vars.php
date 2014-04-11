@@ -1,4 +1,4 @@
-<?
+<?php
 
 class Vars {
 	// Instance of singleton class
@@ -27,7 +27,9 @@ class Vars {
   }
 
   public function getVar($var) {
-    if(!isset(self::$vars[$var])) return null;
+    if(!isset(self::$vars[$var])) {
+      return null;
+    }
     return self::$vars[$var];
   }
 

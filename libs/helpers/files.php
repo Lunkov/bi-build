@@ -1,4 +1,4 @@
-<?
+<?php
 
 class Files {
 	private $hashes_files_old = array();

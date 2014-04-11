@@ -37,9 +37,13 @@ class Counters {
 
   public function printAll() {
     foreach(self::$counters as $key => $val) {
-      if(!isset(self::$counters[$key])) continue;
+      if(!isset(self::$counters[$key])) {
+        continue;
+      }
       $counter_desc = $key;
-      if(isset(self::$counters_desc[$key])) $counter_desc = self::$counters_desc[$key];
+      if(isset(self::$counters_desc[$key])) {
+        $counter_desc = self::$counters_desc[$key];
+      }
       echo $counter_desc. ': '.self::$counters."\n";
     }
   }

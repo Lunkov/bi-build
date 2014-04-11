@@ -15,7 +15,7 @@ class Mail {
    mail($email_to, $subject, $message, $headers);
   }
 
-  public function send_attachment($mailto, $from_mail, $from_name, $replyto, $subject, $message, $path, $filename) {
+  public function send_attachment($mailto, $from_mail, $from_name, $subject, $message, $path, $filename) {
       $file = $path.$filename;
       $file_size = filesize($file);
       $handle = fopen($file, 'r');

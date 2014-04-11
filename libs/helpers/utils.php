@@ -1,4 +1,4 @@
-<?
+<?php
 
 class Utils {
 	
@@ -87,15 +87,14 @@ class Utils {
 	
   static public function escapeshellcmd($filename) {
     $cmd = str_replace(array('\\', '%'), array('\\\\', '%%'), $filename); 
-    $cmd = escapeshellarg($cmd);    
-    return $cmd;
+    return escapeshellarg($cmd);
   }
   
   static public function mkdir($dir) {
     if(!file_exists($dir)) {
 			mkdir($dir, 0x0777, true);
 		}
-    return $dir;
+    return realpath($dir);
   }
   
   static public function rmdir($dir) {
@@ -103,7 +102,11 @@ class Utils {
        $objects = scandir($dir);
        foreach ($objects as $object) {
          if ($object != "." && $object != "..") {
-           if (filetype($dir."/".$object) == "dir") rmdir($dir."/".$object); else unlink($dir."/".$object);
+           if (filetype($dir."/".$object) == "dir") {
+             rmdir($dir."/".$object);
+           } else {
+             unlink($dir."/".$object);
+           }
          }
        }
        reset($objects);
@@ -157,7 +160,9 @@ class Utils {
   }
 
   static public function loadState($filename) {
-    if(!file_exists($filename)) return null;
+    if(!file_exists($filename)) {
+      return null;
+    }
     $str = file_get_contents($filename);
     return json_decode($str);
   }  
