@@ -22,7 +22,7 @@ class Queue {
     return $this->queue;
   }
   
-  public function countTask() {
+  public function countTasks() {
     return count($this->queue);
   }
 

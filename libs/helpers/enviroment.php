@@ -19,8 +19,8 @@ class Enviroment {
 		return filter_input(INPUT_SERVER, 'TEMP');
 	}
 	public static function getProcCount() {
-    return isset(filter_input(INPUT_SERVER, 'NUMBER_OF_PROCESSORS')) ? 
-            filter_input(INPUT_SERVER, 'NUMBER_OF_PROCESSORS') : 1 ;
+    $cnt = filter_input(INPUT_SERVER, 'NUMBER_OF_PROCESSORS');
+    return ($cnt < 1) ? 1 : $cnt ;
 	}
 
 }

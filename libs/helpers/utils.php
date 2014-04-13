@@ -92,7 +92,10 @@ class Utils {
   
   static public function mkdir($dir) {
     if(!file_exists($dir)) {
-			mkdir($dir, 0x0777, true);
+      if (!@mkdir($dir, 0x0777, true)) {
+        $error = error_get_last();
+        Logger::get()->out(Logger::Error, $error['message']);
+      }
 		}
     return realpath($dir);
   }
