@@ -108,4 +108,8 @@ class BuildUtils {
 		return null;
 	}
 
+  public static function getNumberOfParameters($cl, $func) {
+    $method = new ReflectionMethod($cl, $func);
+    return $method->getNumberOfParameters();
+  }
 }
