@@ -56,7 +56,7 @@ class Logger {
     self::$show_time = $show_time;
   }
   
-  public function out($level, $format, $args = []) {
+  public function out($level, $format) {
     if($level > self::$level) { return; }
     if(self::$show_time) {
       echo date('H:i:s').': ';
@@ -64,11 +64,13 @@ class Logger {
     if(self::$show_level) {
       echo self::$strSeverity[$level].': ';
     }
+    /*
     if(is_array($args) && count($args)>0) {
       vprintf($format, $args);
     } else {
       echo $format;
-    }
+    }*/
+    echo $format;
     echo "\n";
   }
   
