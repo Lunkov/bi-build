@@ -3,7 +3,8 @@
 class Enviroment {
 	
 	public static function getOS() {
-		return filter_input(INPUT_SERVER, 'OS');
+		//return filter_input(INPUT_SERVER, 'OS');
+    return strtoupper(PHP_OS);
 	}
 	public static function getUserName() {
 		if (defined('STDIN')) {
@@ -13,7 +14,22 @@ class Enviroment {
 		}
 	}
 	public static function getPlatform() {
-		return filter_input(INPUT_SERVER, 'PROCESSOR_ARCHITEW6432');
+		$ret = filter_input(INPUT_SERVER, 'PROCESSOR_ARCHITEW6432');
+    if(empty($ret)) {
+      $p = php_uname('m');
+      switch($p) {
+        case 'x86_64':
+          $ret = 'x64';
+          break;
+        case 'i386':
+          $ret = 'x32';
+          break;
+      }
+    }
+    return $ret;
+	}
+	public static function getHomeDir() {
+		return filter_input(INPUT_SERVER, 'HOME');
 	}
 	public static function getTemp() {
 		return filter_input(INPUT_SERVER, 'TEMP');
