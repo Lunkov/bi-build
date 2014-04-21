@@ -1,27 +1,30 @@
 <?php
 
+include 'helpers/logger.php';
 include 'helpers/utils.php';
 include 'helpers/enviroment.php';
-include 'helpers/process.php';
 include 'helpers/files.php';
 include 'helpers/timers.php';
 include 'helpers/vars.php';
+include 'helpers/target.php';
 include 'buildinfo.php';
 include 'buildutils.php';
+include 'process/queue.php';
+include 'process/processmanager.php';
+
 
 class Build {
+  private static $configFiles = Array ( 'bi.root', 'bi.config' );
   // Instance of singleton class
 	private static $instance;
-  // Path to release directory 
-	private static $release_path;
-  // Path to build directory. For .obj, .lib and etc. files
-	private static $build_path;
   // Target for build
   private static $make_target = null;
   // All roots
 	private static $roots   = array();
-  // All sorted roots
-	private static $order_roots   = array();
+  // All targets
+	private static $targets = array();
+  // All sorted tasks
+  private static $queue = null;
   // Make Plan
 	private static $make_roots   = array();
   
@@ -30,8 +33,6 @@ class Build {
 	private static $os_type  = array('win');
 	private static $projects_path = array();
 	private static $current_root = '';
-	private static $output = array();
-	private static $extentions = array();
   // Files
   private static $files = null;
   //Users configs for projects
@@ -43,9 +44,6 @@ class Build {
 	private static $buildinfo;
 	private static $is_rebuild = true;
 
-	private static $time_scan = 0;
-	private static $time_work = 0;
-	private static $time_check = 0;
   private static $cnt_targets = 0;
   private static $cnt_files = 0;
 	private static $cnt_lines = 0;
@@ -54,13 +52,15 @@ class Build {
   private static $cnt_warnings = 0;
   private static $cnt_ok = 0;
 	
-	private static $tasks = array();
 	private static $tools = array();
 
+  private static $args = array();
+  
 	private function __construct() {
-		self::$manager = new ProcessManager();
-		self::$buildinfo  = new BuildInfo();
+		self::$manager   = new ProcessManager();
+		self::$buildinfo = new BuildInfo();
     self::$files = new Files();
+    self::$queue = new Queue();
     
     self::regRoot('system', array(
                                 'home_dir' => ''
@@ -85,21 +85,27 @@ class Build {
 			Global $argv;
 			foreach ($argv as $arg) {
 				$e=explode("=",$arg);
-				if(count($e)==2)
-					$_GET[$e[0]]=$e[1];
-				else    
-					$_GET[$e[0]]=0;
+				if(count($e)==2) {
+					self::$args[$e[0]]=$e[1];
+        }	else {
+					self::$args[$e[0]]=0;
+        }
 			}
-		}
+		} else {
+      self::$args = $_GET;
+    }
 
-		if(isset($_GET['os_type'])) {
-			self::$os_type = $_GET['os_type'];
+		if(isset(self::$args['os_type'])) {
+			self::$os_type = self::$args['os_type'];
 		}
-		if(isset($_GET['platform'])) {
-			self::$platform = $_GET['platform'];
+		if(isset(self::$args['platform'])) {
+			self::$platform = self::$args['platform'];
 		}
-		if(isset($_GET['variant'])) {
-			self::$variant = $_GET['variant'];
+		if(isset(self::$args['variant'])) {
+			self::$variant = self::$args['variant'];
+		}
+		if(isset(self::$args['target'])) {
+      self::$make_target = self::$args['target'];
 		}
 		//if(!isset($variant))  $variant  = array('develop', 'production', 'debug');
 		//if(!isset($platform)) $platform = array('x32', 'x64');
@@ -110,11 +116,17 @@ class Build {
 		//print_r(self::$os_type);
 	}
 
+  public function getQueue() {
+    return $this->queue;
+  }
+  
 	public function useTool($tool, $params) {
-    if(file_exists(__DIR__.'/../tools/'.$tool.'.php'))
+    if(file_exists(__DIR__.'/../tools/'.$tool.'.php')) {
       require_once __DIR__.'/../tools/'.$tool.'.php';
-    if(file_exists(__DIR__.'/../tools/cmd/'.$tool.'.php'))
+    }
+    if(file_exists(__DIR__.'/../tools/cmd/'.$tool.'.php')) {
       require_once __DIR__.'/../tools/cmd/'.$tool.'.php';
+    }
 		if(class_exists($tool)) {
 			self::$tools[$tool] = new $tool();
 			if(method_exists($tool, 'init')) {
@@ -123,7 +135,7 @@ class Build {
 		}
 	}
 	
-	public function get_tool($tool) {
+	public function getTool($tool) {
 		if(isset(self::$tools[$tool])) {
 			return self::$tools[$tool];
 		}
@@ -131,22 +143,9 @@ class Build {
 		return null;
 	}
 
-	function addScript($params) {
-		self::$manager->addScript($params);
+	function addScript($task, $params) {
+		self::$queue->addScript($task, $params);
 	}
-	function execScripts() {
-		self::$manager->exec();
-	}
-	function execScript($run) {
-    $output = array();
-    exec($run, $output, $ret);
-    Logger::get()->out(Logger::Info, "Done: $run");
-		$ret = '0';
-		if(isset($output[0])) $ret = $output[0];
-    print_r($output);
-    echo "\n";
-		return $ret;
-  }
   	
 	public function find_roots($sources) {
 		Timers::get()->start('find_roots');
@@ -214,15 +213,16 @@ class Build {
     foreach(self::$roots as $rkey => $root) {
       //echo '--root: '.$rkey."\n";
       foreach(self::$roots[$rkey]['targets'] as $tkey => $target) {
+        $target->makeAbsolutePathes();
         //echo '--target: '.$tkey."\n";
         //self::$roots[$rkey]['targets'][$tkey]['link']    = self::make_absolute_path_link(self::$roots[$rkey]['targets'][$tkey]['link']);
-        self::$roots[$rkey]['targets'][$tkey]['include'] = BuildUtils::make_absolute_path(self::$roots[$rkey]['targets'][$tkey]['include']);
+        //self::$roots[$rkey]['targets'][$tkey]['include'] = BuildUtils::make_absolute_path(self::$roots[$rkey]['targets'][$tkey]['include']);
       }
     }
   }
   
   private function sort_roots() {
-    echo "Sort targets...\n";
+    Logger::get()->out(Logger::Info, 'Sort targets...');
     $prn = false;
     ob_start();
     
@@ -231,19 +231,18 @@ class Build {
     foreach(self::$roots as $rkey => $root) {
       foreach($root['targets'] as $tkey => $target) {
         self::$cnt_targets++;
-        self::$cnt_files+=count($target['files']);
+        self::$cnt_files+=count($target->getSrc());
       }
     }
 
-    $sort_cnt_targets = 0;
     $order = 0;
 
     foreach(self::$roots as $rkey => $root) {
-      if(is_array($root['req'])) {
+      if(isset($root['req']) && is_array($root['req'])) {
         foreach($root['req'] as $tkey => $req) {
           self::$cnt_targets++;
           $path = BuildUtils::makeTargetPath($rkey, $tkey);
-          self::$order_roots[$path]['order'] = $order;
+          self::$queue->addTask($path, $order);
         }
       }
     }
@@ -251,7 +250,7 @@ class Build {
     //var_dump(self::$order_roots);
     $added = 1;
     //&& self::$cnt_targets >= $order
-    while(self::$cnt_targets > count(self::$order_roots) && $added>0) {
+    while(self::$cnt_targets > self::$queue->countTasks() && $added>0) {
       //echo 'Targets sorted count: '.$sort_cnt_targets."\n";
       //echo 'Order: '.$order."\n";
       $added = 0;
@@ -260,16 +259,16 @@ class Build {
         foreach($root['targets'] as $tkey => $target) {
           
           $fullpath = BuildUtils::makeTargetPath($rkey, $tkey);
-          if(!isset(self::$order_roots[$fullpath])) {
+          if(!self::$queue->exists($fullpath)) {
             
             $depends = true;
             //var_dump($target);
-            echo 'CHECK target: '.$rkey.':'.$tkey."\n";
-            if(is_array($target['link'])) {
-              foreach($target['link'] as $link) {
+            Logger::get()->out(Logger::Debug, 'CHECK target: '.$rkey.':'.$tkey);
+            if(is_array($target->getLinks())) {
+              foreach($target->getLinks() as $link) {
                 //$path = BuildUtils::makeTargetPath($link['root'], $link['target']);
-                $exists = isset(self::$order_roots[$link]);
-                echo "\t".'link'.($exists?'+':'-').' '.$link."\n";
+                $exists = self::$queue->exists($link);
+                Logger::get()->out(Logger::Debug, "\t".'link'.($exists?'+':'-').' '.$link);
                 if(!$exists) {
                   $depends = false;
                   break;
@@ -278,9 +277,9 @@ class Build {
             }
             // links not found. build at first stage
             if($depends) {
-              self::$order_roots[$fullpath]['order'] = $order;
+              self::$queue->addTask($fullpath, $order);
               $added++;
-              echo "\t".'ADD:  '.$fullpath."\n";
+              Logger::get()->out(Logger::Debug, "\t".'ADD:  '.$fullpath);
             }
           }
         }
@@ -289,16 +288,16 @@ class Build {
       $order++;
     } // end while
     
-    if(self::$cnt_targets!=count(self::$order_roots)) {
+    if(self::$cnt_targets!=self::$queue->countTasks()) {
       $prn = true;
       Logger::get()->out(Logger::Critical, '===========!!! ERROR !!!==========');
       Logger::get()->out(Logger::Critical, 'Scan targets: '.self::$cnt_targets);
-      Logger::get()->out(Logger::Critical, 'Sort targets: '.count(self::$order_roots));
+      Logger::get()->out(Logger::Critical, 'Sort targets: '.self::$queue->countTasks());
       foreach(self::$roots as $rkey => $root) {
         foreach($root['targets'] as $tkey => $target) {
-          if(is_array($target['link'])) {
-            foreach($target['link'] as $link) {
-              if(!isset(self::$order_roots[$link])) {
+          if(is_array($target->getLinks())) {
+            foreach($target->getLinks() as $link) {
+              if(!self::$queue->exists($link)) {
 								$path1 = BuildUtils::makeTargetPath($rkey, $tkey);
 								$path2 = $link;
                 Logger::get()->out(Logger::Critical, "Target '$path2' not found (by '$path1')");
@@ -307,29 +306,34 @@ class Build {
           }
 				}
 			}
-			echo "==================================\n";
-      var_dump(self::$order_roots);
+			Logger::get()->out(Logger::Critical, '==================================');
+      Logger::get()->out(Logger::Debug, var_export(self::$queue->getQueue(), true));
     }
     $pngString = ob_get_contents();
     ob_end_clean();
-    if($prn) echo $pngString;
+    if($prn) {
+      echo $pngString;
+    }
   }
 
   private function build_plan() {
-    echo "Build plan...\n";
+    Logger::get()->out(Logger::Info, 'Build plan...');
     if(!isset(self::$make_target)) {
       self::$make_roots = self::$order_roots;
       return;
     }
-    $rec = false;
-    foreach ( array_reverse(self::$order_roots) as $key => $val ) {
-      if(stricmp($key, self::$make_target) == 0) {
-        $rec = true;
+    if(is_string(self::$make_target)) {
+      $rec = false;
+      foreach ( array_reverse(self::$order_roots) as $key => $val ) {
+        if(stricmp($key, self::$make_target) == 0) {
+          $rec = true;
+        }
+        if($rec) {
+          self::$make_roots[$key] = $val;
+        }
       }
-      if($rec) {
-        self::$make_roots[$key] = $val;
-      }
-    } 
+    }
+    var_dump(self::$make_roots);
   }
   
 	public function regRoot($root_name, $params) {
@@ -337,12 +341,11 @@ class Build {
 		self::$roots[$root_name] = $params;
 		self::$roots[$root_name]['targets'] = array();
 		if(isset($params['sources'])) {
-			$display = Array ( 'bi.root', 'bi.config' );
 			foreach($params['sources'] as $source) {
-			  echo 'Scan targets: '.$params['home_dir'].DIRECTORY_SEPARATOR.$source."\n";
+			  Logger::get()->out(Logger::Info, 'Scan targets: '.$params['home_dir'].DIRECTORY_SEPARATOR.$source);
 			  $it = new RecursiveDirectoryIterator($params['home_dir'].DIRECTORY_SEPARATOR.$source);
 			  foreach(new RecursiveIteratorIterator($it) as $file) {
-          if (in_array(basename($file), $display)) {
+          if (in_array(basename($file), self::$configFiles)) {
             //echo 'include: '.$file . "\n";
             include($file);
           }
@@ -368,27 +371,11 @@ class Build {
 		}
 	  $params['short_name'] = $reg_name;
     $params['root'] = self::$current_root;
-    
-    //search src-files by mask: *.cpp, etc
-    if(is_array($params['src'])) {
-			$src = array();
-			//var_dump($params['src']);
-			foreach($params['src'] as $file) {
-				if(isset($params['home_dir'])) {
-					$src = array_merge($src, glob($params['home_dir'].DIRECTORY_SEPARATOR.$file, GLOB_NOCHECK));
-				} else {
-					$src = array_merge($src, glob($file, GLOB_NOCHECK));
-				}
-			}
-			//var_dump($src);
-			$params['src'] = $src;
-		}
-		
-	  echo 'Target: '.BuildUtils::makeTargetPath(self::$current_root, $tname)."\n";
-	  //var_dump($params);
-	  self::$roots[self::$current_root][$reg_type][$tname] = $params;
+    $params['name'] = $tname;
+
+    self::$targets[$tname] = new Target($params);
 	}
-		
+
 	public function reg_target($target_name, $params) {
 		self::reg('targets', $target_name, $params);
 	}
@@ -406,19 +393,19 @@ class Build {
     self::reg('req', $req_name, $params);
 	}
   
-	public function getTarget($root, $target) {
-		if(isset(self::$roots[$root]['targets'][$target])) {
-			return self::$roots[$root]['targets'][$target];
+	public function getTarget($target) {
+		if(isset(self::$targets[$target])) {
+			return self::$targets[$target];
 		}
-    Logger::get()->out(Logger::Critical, "Target not found (root='$root', target='$target')");
+    Logger::get()->out(Logger::Critical, "Target not found (target='$target')");
 		return null;
 	}
 	
   public function getTargetByLink($fullink) {
     $root = BuildUtils::getProjectName($fullink);
     $target = BuildUtils::getTargetName($fullink);
-		if(isset(self::$roots[$root]['targets'][$target])) {
-			return self::$roots[$root]['targets'][$target];
+		if(isset(self::$targets[$target])) {
+			return self::$targets[$target];
 		}
 		if(isset(self::$roots[$root]['req'][$target])) {
 			return self::$roots[$root]['req'][$target];
@@ -428,20 +415,19 @@ class Build {
 	}
   	
   public function setResult($target, $result) {
-		Echo 'NOTICE: setResult (target='.$target.', result='.$result.")\n";
-		self::$order_roots[$target]['result'] = $result;
+		Logger::get()->out(Logger::Debug, 'setResult (target='.$target.', result='.$result.')');
+		self::$queue->setResult($target, $result);
 		//var_dump(self::$order_roots);
 	}
 
   public function getResult($target) {
-		Echo 'NOTICE: getResult (target='.$target.")\n";
-		if(isset(self::$order_roots[$target]['result'])) {
-			return self::$order_roots[$target]['result'];
-		}
-		return null;
+		Logger::get()->out(Logger::Debug, 'getResult (target='.$target.')');
+    return self::$queue->getResult($target);
 	}
 	
 	private function build() {
+    //self::build_plan();
+    
     Timers::get()->start('build');
 		foreach(self::$os_type as $os) {
 			Logger::get()->out(Logger::Info, "OS: $os");
@@ -453,27 +439,29 @@ class Build {
           Logger::get()->out(Logger::Info, "Platform: $pl");
           
 					self::$buildinfo->set($os, $pl, $vardev);
-					
-					$build_dir = self::$build_path.DIRECTORY_SEPARATOR.'build'.DIRECTORY_SEPARATOR.$os.DIRECTORY_SEPARATOR.$vardev.DIRECTORY_SEPARATOR.$pl;
-					
-					foreach(self::$order_roots as $key => $order) {
-						echo 'Target: '.$key."\n";
+					foreach(self::$tools as $ktool => $vtools) {
+            if(method_exists($ktool, 'initEnv')) {
+              $vtools->initEnv(self::$buildinfo);
+            }
+          }
+          
+					foreach(self::$queue->getQueue() as $key => $order) {
+						Logger::get()->out(Logger::Info, "Target: $key");
 						
+            
 						$root = BuildUtils::getProjectName($key);
 						$target = BuildUtils::getTargetName($key);
 						
-						$tg = self::$roots[$root]['targets'][$target];
+						$tg = self::getTarget($root, $target);
 
-						echo 'Build folder: '.$build_dir.$tg['dir']."\n";
+						Logger::get()->out(Logger::Info, 'Build folder: '.self::$buildinfo->getBuildPath().$tg['dir']);
 						/*
              * Check for use cache library
              */
-            if(isset($tg['cache'])) {
-              $result = self::getCacheBuild(self::$buildinfo, $key, $tg['cache']);
-              //echo '>>> FIND??? '.$result."\n";
-              var_dump($result);
+            if(isset($tg->getCache())) {
+              $result = self::getCacheBuild(self::$buildinfo, $key, $tg->getCache());
+              //var_dump($result);
               if(is_string($result) && file_exists($result)) {
-                //echo '>>> FIND: '.$result."\n";
                 self::setResult($key, $result);
                 continue;
               }
@@ -494,22 +482,11 @@ class Build {
             //echo 'Build... '.$key."\n";
             /*
              * Run build tool
-             * 
              */
-            if(isset($tg['tool'])) {
-              if(class_exists($tg['tool'])) {
-                if(method_exists($tg['tool'], $tg['make'])) {
-                  $m = $tg['make'];
-                  self::$tools[$tg['tool']]->$m(self::$buildinfo, $build_dir, $key, self::$roots[$root]['targets'][$target]);
-                } else {
-                  echo 'ERROR: Action \''. $tg['make'].'\' in \''.$tg['tool']."' not found\n";
-                }
-              } else {
-                echo 'ERROR: Tool \''.$tg['tool']."' not found\n";
-              }
-            }
+            $tg->make(array('buildinfo' => self::$buildinfo, 'queue' => self::$queue));
 					}
-					echo 'RESULT='.self::$order_roots[$key]['result']."\n";
+          self::$manager->exec(self::$queue);
+					//echo 'RESULT='.self::$order_roots[$key]['result']."\n";
 				}
 			}
 		}
@@ -519,37 +496,37 @@ class Build {
   private function getCacheBuild($buildinfo, $target_name, $target_cache) {
     $tg = self::getTargetByLink($target_cache);
     if(!is_array($tg)) {
-      echo "ERROR: Target cache '$target_cache' is not found (in '$target_name')\n";
+      Logger::get()->out(Logger::Error, "Target cache '$target_cache' is not found (in '$target_name')");
       var_dump($tg);
       return null;
     }
     if(!isset($tg['result'])) {
-      echo 'ERROR: Target cache \''.$target_name."' is not found result\n";
+      Logger::get()->out(Logger::Error, "Target cache '$target_name' is not found result");
       return null;
     }
     //var_dump($buildinfo);
     //var_dump($tg['result']);
     foreach($tg['result'] as $key => $val) {
       if($buildinfo->checkBuild($key)) {
-        echo 'NOTICE: Target cache \''.$target_name."' found sources '$val' \n";
+        Logger::get()->out(Logger::Notice, "Target cache '$target_name' found sources '$val'");
         return $tg['home_dir'].DIRECTORY_SEPARATOR.$val;
       }
     }
   }
   
 	private function check() {
-		echo "================== CHECK ===================\n";
+		Logger::get()->out(Logger::Info, '================== CHECK ===================');
     Timers::get()->start('check');
 		foreach(self::$os_type as $os) {
-			echo 'OS: '.$os."\n";
+      Logger::get()->out(Logger::Info, "OS: $os");
 			
 			foreach(self::$variant as $vardev) {
-				echo 'Variant: '.$vardev."\n";
+        Logger::get()->out(Logger::Info, "Variant: $vardev");
 				
 				foreach(self::$platform as $pl) {
-					echo 'Platform: '.$pl."\n";
+					Logger::get()->out(Logger::Info, "Platform: $pl");
 					foreach(self::$order_roots as $key => $order) {
-						echo 'Target: '.$key."\n";
+            Logger::get()->out(Logger::Info, "Target: $key");
 						$root = BuildUtils::getProjectName($key);
 						$target = BuildUtils::getTargetName($key);
 						
@@ -561,11 +538,11 @@ class Build {
 										file_exists(self::$order_roots['result'])) {
 											$filename_log = Utils::changeExtention(self::$order_roots['result'], '.log');
 											
-											Build::get()->addScript(array(
-														'home_dir' => Utils::getPath(self::$order_roots['result']),
-														'script_name' => self::$order_roots['result'],
-														'env' => null,
-														'log_file' => $filename_log
+											Build::get()->addScript($tg, array(
+                                      'home_dir' => Utils::getPath(self::$order_roots['result']),
+                                      'script_name' => self::$order_roots['result'],
+                                      'env' => null,
+                                      'log_file' => $filename_log
 														));
 									}
 						}
@@ -579,16 +556,18 @@ class Build {
 
 	public function exec() {
     Timers::get()->start('exec');
-		switch($_GET['do']) {
+		switch(self::$args['do']) {
 		case 'rebuild':
 			self::setRebuild(true);
 			self::find_roots(self::$projects_path);
 			self::build();
-			break;
+			self::saveState();
+  		break;
 		case 'build':
 			self::setRebuild(false);
 			self::loadState();
 			self::build();
+  		self::saveState();
 			break;
 		case 'stat':
 			self::find_roots(self::$projects_path);
@@ -599,13 +578,17 @@ class Build {
 			self::find_roots(self::$projects_path);
 			//self::load_roots();
 			self::build();
+   		self::saveState();
 			self::check();
 			break;	
 		case 'clear':
 			self::clear();
 			break;
+    default:
+      Logger::get()->out(Logger::Info, '============================================');
+      Logger::get()->out(Logger::Info, 'Command is not defined');
+      break;
 		}
-		self::saveState();
     Timers::get()->stop('exec');
 		self::printTimers();
 	}
@@ -651,52 +634,51 @@ class Build {
       }
     }
     Timers::get()->stop('stat');
-    echo "============================================\n";
-    echo 'Targets:   '.self::$cnt_targets."\n";
-    echo 'Files:     '.self::$cnt_files."\n";
-    echo 'Lines:     '.self::$cnt_lines."\n";
+    Logger::get()->out(Logger::Info, '============================================');
+    Logger::get()->out(Logger::Info, 'Targets:   '.self::$cnt_targets);
+    Logger::get()->out(Logger::Info, 'Files:     '.self::$cnt_files);
+    Logger::get()->out(Logger::Info, 'Lines:     '.self::$cnt_lines);
   }
   
 	private function printTimers() {
-    Logger::get()->out(Logger::Info, "============================================");
+    Logger::get()->out(Logger::Info, '============================================');
     Logger::get()->out(Logger::Info, 'Targets:   '.self::$cnt_targets);
     if(self::$cnt_tasks > 0) {
-			echo 'Tasks:     '.self::$cnt_tasks."\n";
-			echo 'OK:        '.self::$cnt_ok."\n";
-			echo 'Progress:  '.round(self::$cnt_ok*100/self::$cnt_tasks)."%\n";
-			echo 'Erros:     '.self::$cnt_errors."\n";
-			echo 'Warnings:  '.self::$cnt_warnings."\n";
+			Logger::get()->out(Logger::Info, 'Tasks:     '.self::$cnt_tasks);
+			Logger::get()->out(Logger::Info, 'OK:        '.self::$cnt_ok);
+			Logger::get()->out(Logger::Info, 'Progress:  '.round(self::$cnt_ok*100/self::$cnt_tasks).'%');
+			Logger::get()->out(Logger::Info, 'Erros:     '.self::$cnt_errors);
+			Logger::get()->out(Logger::Info, 'Warnings:  '.self::$cnt_warnings);
 		}
-    echo "--- Timers ---------------------------------\n";
+    Logger::get()->out(Logger::Info, '--- Timers ---------------------------------');
     Timers::get()->printAll();
    
-    echo "============================================\n";
+    Logger::get()->out(Logger::Info, '============================================');
 	}
 	private function clear() {
-		rmdir(self::$build_path);
+		rmdir(self::$buildinfo->getBuildPath());
 	}
 	public function setReleasePath($release_path) {
-		self::$release_path = $release_path;
+		self::$buildinfo->setReleasePath($release_path);
 	}
 	public function setBuildPath($build_path) {
-		self::$build_path = $build_path.DIRECTORY_SEPARATOR.Enviroment::getUserName().DIRECTORY_SEPARATOR;
+		self::$buildinfo->setBuildPath($build_path);
 	}
 	public function setProjectsPath($projects_path) {
 		self::$projects_path = $projects_path;
 	}
 
   public function saveState() {
-    Utils::saveState(self::$build_path.DIRECTORY_SEPARATOR.'roots.order', self::$order_roots);
-    Utils::saveState(self::$build_path.DIRECTORY_SEPARATOR.'roots.cache', self::$roots);
-    
-    self::$files->saveState(self::$build_path.DIRECTORY_SEPARATOR.'files.stat');
+    Utils::saveState(self::$buildinfo->getBuildPath().DIRECTORY_SEPARATOR.'roots.cache', self::$roots);
+    self::$queue->saveState(self::$buildinfo->getBuildPath());
+    self::$files->saveState(self::$buildinfo->getBuildPath().DIRECTORY_SEPARATOR.'files.stat');
   }
 
   public function loadState() {
-    self::$roots = Utils::loadState(self::$build_path.DIRECTORY_SEPARATOR.'roots.cache');
-    self::$order_roots = Utils::loadState(self::$build_path.DIRECTORY_SEPARATOR.'roots.order');
-    
-    self::$files->loadState(self::$build_path.DIRECTORY_SEPARATOR.'files.stat');
+    self::$roots = Utils::loadState(self::$buildinfo->getBuildPath().DIRECTORY_SEPARATOR.'roots.cache');
+
+    self::$queue->loadState(self::$buildinfo->getBuildPath());
+    self::$files->loadState(self::$buildinfo->getBuildPath().DIRECTORY_SEPARATOR.'files.stat');
   }
   
   public function setRoots($rt) {

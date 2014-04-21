@@ -159,7 +159,11 @@ class Utils {
   }
   
   static public function saveState($filename, $data) {
-    file_put_contents($filename, json_encode($data));
+    try {
+      @file_put_contents($filename, json_encode($data));
+    } catch (Exception $e) {
+      Logger::get()->out(Logger::Error, $e->getMessage());
+    }
   }
 
   static public function loadState($filename) {
