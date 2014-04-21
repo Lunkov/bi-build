@@ -1,6 +1,18 @@
-<?
+<?php
+
 
 include __DIR__.'/libs/build.php';
+
+ECHO '=';
+echo Enviroment::getPlatform();
+echo Enviroment::getOS();
+
+if(Enviroment::getOS() == 'WIN') {
+  include __DIR__.'/config/win.config.php';
+}
+if(Enviroment::getOS() == 'LINUX') {
+  include __DIR__.'/config/linux.config.php';
+}
 
 /*
  * Command line parameters
@@ -14,38 +26,13 @@ include __DIR__.'/libs/build.php';
 $_GET['os_type'] = array('win');
 $_GET['platform'] = array('x64');
 $_GET['variant'] = array('production');
+$_GET['target'] = 'atlansys-ess:\src\libs\ldap@lib_ldap';
 
 Build::get()->define_params();
-Build::get()->setReleasePath('C:/src/_build/release/');
-Build::get()->setBuildPath('C:/src/_build/cache/');
-Build::get()->setProjectsPath(array(realpath(__DIR__.'/../../projects/')));
-
-/*
- * Init tools
- * 
- */
-
-Build::get()->use_tool('svn', array());
-Build::get()->use_tool('vcc130', array(
-						'home_path' => 'C:\tools\MicrosoftVisualStudio12\VC',
-						'sdk_path' => 'C:\tools\SDK\8.1',
-						'wdk_path' => 'C:\tools\SDK\8.1',
-						'qt_path'  => 'C:\Qt\5.2.1\5.2.1\msvc2012_64',
-						));
-
-Build::get()->use_tool('wix', array(
-						'home_path' => 'C:\Program Files (x86)\WiX Toolset v3.8',
-						));
-
-$link_unit_test  = array( 	Build::get()->link2Target('atlansys-ess', '\src\libs\test_engine@test_engine'),
-							Build::get()->link2Target('atlansys-ess', '\src\libs\test_env@test_env'),
-				);
 				
 /*
  * Execute
  * 
  */
  
- Build::get()->exec();
-
-
+Build::get()->exec();
