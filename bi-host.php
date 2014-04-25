@@ -3,11 +3,9 @@
 
 include __DIR__.'/libs/build.php';
 
-ECHO '=';
-echo Enviroment::getPlatform();
-echo Enviroment::getOS();
+echo Enviroment::toString();
 
-if(Enviroment::getOS() == 'WIN') {
+if(Enviroment::getOS() == 'WINNT') {
   include __DIR__.'/config/win.config.php';
 }
 if(Enviroment::getOS() == 'LINUX') {

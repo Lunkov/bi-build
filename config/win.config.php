@@ -14,22 +14,22 @@ Vars::get()->setVar('Cert.SHA1',          '87fc50e1cbfff00bb1ded61db0a2b4f4a2ff8
  * 
  */
 
-Build::get()->useTool('upx',      array('home_path' => 'C:\tools\bin'));
-Build::get()->useTool('sigcheck', array('home_path' => 'C:\tools\bin'));
-Build::get()->useTool('svn', array());
+Build::get()->initTool('upx',      array('home_path' => 'C:\tools\bin'));
+Build::get()->initTool('sigcheck', array('home_path' => 'C:\tools\bin'));
+Build::get()->initTool('svn', array());
 
-Build::get()->useTool('vcc130', array(
+Build::get()->initTool('vcc130', array(
 						'home_path' => 'C:\tools\Microsoft Visual Studio 12.0\VC',
 						'sdk_path' => 'C:\tools\SDK\8.1',
 						'wdk_path' => 'C:\tools\SDK\8.1',
 						'qt_path'  => 'C:\Qt\5.2.1\5.2.1\msvc2012_64',
 						));
 
-Build::get()->useTool('wix', array(
+Build::get()->initTool('wix', array(
 						'home_path' => 'C:\Program Files (x86)\WiX Toolset v3.8',
 						));
 
-Build::get()->useTool('docbook', array(
+Build::get()->initTool('docbook', array(
 						'home_path' => 'C:\tools\docbook',
 						));
 

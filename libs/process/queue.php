@@ -56,6 +56,18 @@ class Queue {
     return true;
   }
   
+  public function moveFirst() {
+    reset($this->queue);
+  }
+
+  public function moveNext() {
+    next($this->queue);
+  }
+
+  public function getCurrent() {
+    return current($this->queue);
+  }
+  
   public function getTask($target) {
     if(!$this->exists($target)) {
       return null;

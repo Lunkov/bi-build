@@ -120,7 +120,7 @@ class Build {
     return $this->queue;
   }
   
-	public function useTool($tool, $params) {
+	public function initTool($tool, $params) {
     if(file_exists(__DIR__.'/../tools/'.$tool.'.php')) {
       require_once __DIR__.'/../tools/'.$tool.'.php';
     }
@@ -131,9 +131,32 @@ class Build {
 			self::$tools[$tool] = new $tool();
 			if(method_exists($tool, 'init')) {
 				self::$tools[$tool]->init($params);
-			}
-		}
+			} else {
+        Logger::get()->out(Logger::Notice, __FUNCTION__.": Action 'init' in '$tool' not found");
+      }
+		} else {
+        Logger::get()->out(Logger::Critical, __FUNCTION__.": Tool '$tool' not found");
+    }
 	}
+  
+	public function useTool($tool, $func, $params) {
+    if(class_exists($tool)) {
+      if(method_exists($tool, $func)) {
+        $count_parameters = BuildUtils::getNumberOfParameters($tool, $func);
+        if($count_parameters == 1) {
+          self::$tools[$tool]->$func(array(
+                                              'buildinfo' => $params['buildinfo'],
+                                              'target' => $this,
+                                              'queue' => $params['queue']
+                                        ));
+        } else {
+          Logger::get()->out(Logger::Critical, 'Action \''. $func.'\' in \''.$tool."' parameters count = ".$count_parameters);
+        }
+      } else {
+        Logger::get()->out(Logger::Critical, 'Action \''. $func.'\' in \''.$tool."' not found");
+      }
+    }
+  }
 	
 	public function getTool($tool) {
 		if(isset(self::$tools[$tool])) {
@@ -147,7 +170,7 @@ class Build {
 		self::$queue->addScript($task, $params);
 	}
   	
-	public function find_roots($sources) {
+	private function findRoots($sources) {
 		Timers::get()->start('find_roots');
 		$display = Array ( 'bi.root', 'bi.config' );
 		foreach($sources as $source) {
@@ -165,7 +188,7 @@ class Build {
 			}
 		}
     self::make_absolute_pathes();
-    self::sort_roots();
+    self::sortTasks();
 		Timers::get()->stop('find_roots');
   }
   
@@ -212,7 +235,7 @@ class Build {
   private function make_absolute_pathes() {
     foreach(self::$roots as $rkey => $root) {
       //echo '--root: '.$rkey."\n";
-      foreach(self::$roots[$rkey]['targets'] as $tkey => $target) {
+      foreach(self::$targets as $tkey => $target) {
         $target->makeAbsolutePathes();
         //echo '--target: '.$tkey."\n";
         //self::$roots[$rkey]['targets'][$tkey]['link']    = self::make_absolute_path_link(self::$roots[$rkey]['targets'][$tkey]['link']);
@@ -221,31 +244,22 @@ class Build {
     }
   }
   
-  private function sort_roots() {
+  private function sortTasks() {
     Logger::get()->out(Logger::Info, 'Sort targets...');
     $prn = false;
     ob_start();
     
+    $order = 0;
     self::$cnt_targets = 0;
     self::$cnt_files = 0;
-    foreach(self::$roots as $rkey => $root) {
-      foreach($root['targets'] as $tkey => $target) {
-        self::$cnt_targets++;
-        self::$cnt_files+=count($target->getSrc());
+    foreach(self::$targets as $tkey => $target) {
+      self::$cnt_targets++;
+      self::$cnt_files+=count($target->getSrc());
+      if($target->getType() == TypeTarget::REQUREMENT) {
+        self::$queue->addTask($target->getName(), $order);
       }
     }
 
-    $order = 0;
-
-    foreach(self::$roots as $rkey => $root) {
-      if(isset($root['req']) && is_array($root['req'])) {
-        foreach($root['req'] as $tkey => $req) {
-          self::$cnt_targets++;
-          $path = BuildUtils::makeTargetPath($rkey, $tkey);
-          self::$queue->addTask($path, $order);
-        }
-      }
-    }
     $order++;
     //var_dump(self::$order_roots);
     $added = 1;
@@ -254,9 +268,10 @@ class Build {
       //echo 'Targets sorted count: '.$sort_cnt_targets."\n";
       //echo 'Order: '.$order."\n";
       $added = 0;
-      foreach(self::$roots as $rkey => $root) {
+      //foreach(self::$roots as $rkey => $root) {
         
-        foreach($root['targets'] as $tkey => $target) {
+        //foreach($root['targets'] as $tkey => $target) {
+        foreach(self::$targets as $tkey => $target) {
           
           $fullpath = BuildUtils::makeTargetPath($rkey, $tkey);
           if(!self::$queue->exists($fullpath)) {
@@ -283,7 +298,7 @@ class Build {
             }
           }
         }
-      }
+      //}
       //echo 'added='.$added."\n";
       $order++;
     } // end while
@@ -293,19 +308,17 @@ class Build {
       Logger::get()->out(Logger::Critical, '===========!!! ERROR !!!==========');
       Logger::get()->out(Logger::Critical, 'Scan targets: '.self::$cnt_targets);
       Logger::get()->out(Logger::Critical, 'Sort targets: '.self::$queue->countTasks());
-      foreach(self::$roots as $rkey => $root) {
-        foreach($root['targets'] as $tkey => $target) {
-          if(is_array($target->getLinks())) {
-            foreach($target->getLinks() as $link) {
-              if(!self::$queue->exists($link)) {
-								$path1 = BuildUtils::makeTargetPath($rkey, $tkey);
-								$path2 = $link;
-                Logger::get()->out(Logger::Critical, "Target '$path2' not found (by '$path1')");
-              }
+      foreach(self::$targets as $tkey => $target) {
+        if(is_array($target->getLinks())) {
+          foreach($target->getLinks() as $link) {
+            if(!self::$queue->exists($link)) {
+              $path1 = BuildUtils::makeTargetPath($rkey, $tkey);
+              $path2 = $link;
+              Logger::get()->out(Logger::Critical, "Target '$path2' not found (by '$path1')");
             }
           }
-				}
-			}
+        }
+      }
 			Logger::get()->out(Logger::Critical, '==================================');
       Logger::get()->out(Logger::Debug, var_export(self::$queue->getQueue(), true));
     }
@@ -339,7 +352,7 @@ class Build {
 	public function regRoot($root_name, $params) {
 		self::$current_root = $root_name;
 		self::$roots[$root_name] = $params;
-		self::$roots[$root_name]['targets'] = array();
+		//self::$roots[$root_name]['targets'] = array();
 		if(isset($params['sources'])) {
 			foreach($params['sources'] as $source) {
 			  Logger::get()->out(Logger::Info, 'Scan targets: '.$params['home_dir'].DIRECTORY_SEPARATOR.$source);
@@ -372,25 +385,25 @@ class Build {
 	  $params['short_name'] = $reg_name;
     $params['root'] = self::$current_root;
     $params['name'] = $tname;
-
+    $params['type'] = $reg_type;
     self::$targets[$tname] = new Target($params);
 	}
 
 	public function reg_target($target_name, $params) {
-		self::reg('targets', $target_name, $params);
+		self::reg(TypeTarget::BUILDING, $target_name, $params);
 	}
 
 	public function reg_unit_test($test_name, $params) {
 		//var_dump($params);
     $params['make'] = 'console_exe';
     $params['utest'] = true;
-		self::reg('targets', 'unit_test_'.$test_name, $params);
+		self::reg(TypeTarget::BUILDING, 'unit_test_'.$test_name, $params);
 	}
 	
 	public function reg_requirements($req_name, $params) {
 		//var_dump($params);
     //$params['utest'] = true;
-    self::reg('req', $req_name, $params);
+    self::reg(TypeTarget::REQUREMENT, $req_name, $params);
 	}
   
 	public function getTarget($target) {
@@ -401,19 +414,6 @@ class Build {
 		return null;
 	}
 	
-  public function getTargetByLink($fullink) {
-    $root = BuildUtils::getProjectName($fullink);
-    $target = BuildUtils::getTargetName($fullink);
-		if(isset(self::$targets[$target])) {
-			return self::$targets[$target];
-		}
-		if(isset(self::$roots[$root]['req'][$target])) {
-			return self::$roots[$root]['req'][$target];
-		}    
-    Logger::get()->out(Logger::Critical, "Target not found (root='$root', target='$target')");
-		return null;
-	}
-  	
   public function setResult($target, $result) {
 		Logger::get()->out(Logger::Debug, 'setResult (target='.$target.', result='.$result.')');
 		self::$queue->setResult($target, $result);
@@ -427,63 +427,59 @@ class Build {
 	
 	private function build() {
     //self::build_plan();
-    
     Timers::get()->start('build');
 		foreach(self::$os_type as $os) {
 			Logger::get()->out(Logger::Info, "OS: $os");
 			
       foreach(self::$variant as $vardev) {
         Logger::get()->out(Logger::Info, "Variant: $vardev");
-
         foreach(self::$platform as $pl) {
           Logger::get()->out(Logger::Info, "Platform: $pl");
-          
 					self::$buildinfo->set($os, $pl, $vardev);
 					foreach(self::$tools as $ktool => $vtools) {
             if(method_exists($ktool, 'initEnv')) {
               $vtools->initEnv(self::$buildinfo);
             }
           }
-          
-					foreach(self::$queue->getQueue() as $key => $order) {
+          self::$queue->moveFirst();
+					while($val = self::$queue->getCurrent()) {
+            $key = $val->getName();
 						Logger::get()->out(Logger::Info, "Target: $key");
-						
             
-						$root = BuildUtils::getProjectName($key);
-						$target = BuildUtils::getTargetName($key);
-						
-						$tg = self::getTarget($root, $target);
-
-						Logger::get()->out(Logger::Info, 'Build folder: '.self::$buildinfo->getBuildPath().$tg['dir']);
-						/*
-             * Check for use cache library
-             */
-            if(isset($tg->getCache())) {
-              $result = self::getCacheBuild(self::$buildinfo, $key, $tg->getCache());
-              //var_dump($result);
-              if(is_string($result) && file_exists($result)) {
-                self::setResult($key, $result);
-                continue;
-              }
-              if(is_array($result) && file_exists($result)) {
-                $good = true;
-                foreach($result as $r) {
-                  if(!file_exists($r)) {
-                    $good = false;
-                  }
-                }
-                if($good) {
+						$tg = self::getTarget($val->getName());
+            if(is_object($tg)) {
+              $tg->setBuildPath(self::$buildinfo->getBuildPath());
+              /*
+               * Check for use cache library
+               */
+              if($tg->existsCache()) {
+                $result = self::getCacheBuild(self::$buildinfo, $key, $tg->getCache());
+                //var_dump($result);
+                if(is_string($result) && file_exists($result)) {
                   self::setResult($key, $result);
-                  //echo '>>> FIND: '.$result."\n";
                   continue;
                 }
+                if(is_array($result) && file_exists($result)) {
+                  $good = true;
+                  foreach($result as $r) {
+                    if(!file_exists($r)) {
+                      $good = false;
+                    }
+                  }
+                  if($good) {
+                    self::setResult($key, $result);
+                    //echo '>>> FIND: '.$result."\n";
+                    continue;
+                  }
+                }
               }
+              //echo 'Build... '.$key."\n";
+              /*
+               * Run build tool
+               */
+              $tg->make(array('buildinfo' => self::$buildinfo, 'queue' => self::$queue));
             }
-            //echo 'Build... '.$key."\n";
-            /*
-             * Run build tool
-             */
-            $tg->make(array('buildinfo' => self::$buildinfo, 'queue' => self::$queue));
+            self::$queue->moveNext();
 					}
           self::$manager->exec(self::$queue);
 					//echo 'RESULT='.self::$order_roots[$key]['result']."\n";
@@ -525,13 +521,14 @@ class Build {
 				
 				foreach(self::$platform as $pl) {
 					Logger::get()->out(Logger::Info, "Platform: $pl");
-					foreach(self::$order_roots as $key => $order) {
-            Logger::get()->out(Logger::Info, "Target: $key");
-						$root = BuildUtils::getProjectName($key);
-						$target = BuildUtils::getTargetName($key);
+          
+          self::$queue->moveFirst();
+					while($val = self::$queue->getCurrent()) {
+            $key = $val->getName();
+						Logger::get()->out(Logger::Info, "Target: $key");
 						
-						$tg = self::$roots[$root]['targets'][$target];
-						
+						$tg = self::getTarget($val->getName());
+            
 						if(isset($tg['utest']) && $tg['utest'] && 
 							 isset(self::$order_roots['result']))	 {
 								 if(is_string() &&
@@ -559,7 +556,7 @@ class Build {
 		switch(self::$args['do']) {
 		case 'rebuild':
 			self::setRebuild(true);
-			self::find_roots(self::$projects_path);
+			self::findRoots(self::$projects_path);
 			self::build();
 			self::saveState();
   		break;
@@ -570,12 +567,12 @@ class Build {
   		self::saveState();
 			break;
 		case 'stat':
-			self::find_roots(self::$projects_path);
+			self::findRoots(self::$projects_path);
 			self::stat();
 			break;
 		case 'check':
 			self::setRebuild(true);
-			self::find_roots(self::$projects_path);
+			self::findRoots(self::$projects_path);
 			//self::load_roots();
 			self::build();
    		self::saveState();
@@ -622,15 +619,11 @@ class Build {
     self::$cnt_targets = 0;
     self::$cnt_files = 0;
     self::$cnt_lines = 0;
-    foreach(self::$roots as $rkey => $root) {
-      foreach($root['targets'] as $tkey => $target) {
-        self::$cnt_targets++;
-        if(is_array($target['src'])) {
-					self::$cnt_files+=count($target['src']);
-					foreach($target['src'] as $file) {
-						self::$cnt_lines+=Utils::getFileLines($file);
-					}
-				}
+    foreach(self::$targets as $tkey => $target) {
+      self::$cnt_targets++;
+      self::$cnt_files+=$target->getCountSrc();
+      foreach($target->getSrc() as $file) {
+          self::$cnt_lines+=Utils::getFileLines($file);
       }
     }
     Timers::get()->stop('stat');
