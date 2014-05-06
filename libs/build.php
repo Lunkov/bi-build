@@ -144,11 +144,9 @@ class Build {
       if(method_exists($tool, $func)) {
         $count_parameters = BuildUtils::getNumberOfParameters($tool, $func);
         if($count_parameters == 1) {
-          self::$tools[$tool]->$func(array(
-                                              'buildinfo' => $params['buildinfo'],
-                                              'target' => $this,
-                                              'queue' => $params['queue']
-                                        ));
+          Logger::get()->out(Logger::Info, "Run action '$func' in '$tool'");
+          self::$tools[$tool]->$func(array_merge($params, array(
+                                        )));
         } else {
           Logger::get()->out(Logger::Critical, 'Action \''. $func.'\' in \''.$tool."' parameters count = ".$count_parameters);
         }
@@ -167,7 +165,7 @@ class Build {
 	}
 
 	function addScript($task, $params) {
-		self::$queue->addScript($task, $params);
+		self::$queue->addProcess($task, $params);
 	}
   	
 	private function findRoots($sources) {
@@ -271,14 +269,17 @@ class Build {
       //foreach(self::$roots as $rkey => $root) {
         
         //foreach($root['targets'] as $tkey => $target) {
-        foreach(self::$targets as $tkey => $target) {
+        //foreach(self::$targets as $tkey => $target) {
+        foreach(self::$targets as $target) {
           
-          $fullpath = BuildUtils::makeTargetPath($rkey, $tkey);
-          if(!self::$queue->exists($fullpath)) {
+          //$fullpath = BuildUtils::makeTargetPath($rkey, $tkey);
+          //$fullpath = BuildUtils::makeTargetPath($rkey, $tkey);
+          //if(!self::$queue->exists($fullpath)) {
+          if(!self::$queue->exists($target->getName())) {
             
             $depends = true;
             //var_dump($target);
-            Logger::get()->out(Logger::Debug, 'CHECK target: '.$rkey.':'.$tkey);
+            Logger::get()->out(Logger::Debug, 'CHECK target: '.$target->getName());
             if(is_array($target->getLinks())) {
               foreach($target->getLinks() as $link) {
                 //$path = BuildUtils::makeTargetPath($link['root'], $link['target']);
@@ -292,9 +293,9 @@ class Build {
             }
             // links not found. build at first stage
             if($depends) {
-              self::$queue->addTask($fullpath, $order);
+              self::$queue->addTask($target->getName(), $order);
               $added++;
-              Logger::get()->out(Logger::Debug, "\t".'ADD:  '.$fullpath);
+              Logger::get()->out(Logger::Debug, "\t".'ADD:  '.$target->getName());
             }
           }
         }
@@ -308,11 +309,12 @@ class Build {
       Logger::get()->out(Logger::Critical, '===========!!! ERROR !!!==========');
       Logger::get()->out(Logger::Critical, 'Scan targets: '.self::$cnt_targets);
       Logger::get()->out(Logger::Critical, 'Sort targets: '.self::$queue->countTasks());
-      foreach(self::$targets as $tkey => $target) {
+      foreach(self::$targets as $target) {
         if(is_array($target->getLinks())) {
           foreach($target->getLinks() as $link) {
             if(!self::$queue->exists($link)) {
-              $path1 = BuildUtils::makeTargetPath($rkey, $tkey);
+              //$path1 = BuildUtils::makeTargetPath($rkey, $tkey);
+              $path1 = $target->getName();
               $path2 = $link;
               Logger::get()->out(Logger::Critical, "Target '$path2' not found (by '$path1')");
             }
@@ -386,7 +388,8 @@ class Build {
     $params['root'] = self::$current_root;
     $params['name'] = $tname;
     $params['type'] = $reg_type;
-    self::$targets[$tname] = new Target($params);
+    $index = BuildUtils::makeTargetPath($params['root'], $params['name']);
+    self::$targets[$index] = new Target($params);
 	}
 
 	public function reg_target($target_name, $params) {
@@ -478,6 +481,8 @@ class Build {
                * Run build tool
                */
               $tg->make(array('buildinfo' => self::$buildinfo, 'queue' => self::$queue));
+            } else {
+              Logger::get()->out(Logger::Critical, "Target is not object\n". var_export($target));
             }
             self::$queue->moveNext();
 					}

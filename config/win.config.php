@@ -4,6 +4,8 @@ Build::get()->setReleasePath('C:/src/_build/release/');
 Build::get()->setBuildPath('C:/src/_build/cache/');
 Build::get()->setProjectsPath(array('c:/src/a-proj/'));
 
+Logger::get()->setLevel(Logger::Debug);
+
 Vars::get()->setVar('Cert.MSCV-VSClass3', 'C:\tools\cert\After_10-10-10_MSCV-VSClass3.cer');
 Vars::get()->setVar('Cert.Company',       'Atlansys Software LLC');
 Vars::get()->setVar('Cert.SHA256',        'f489fb8717663b4ac2547b60d70b2b2a2405b57b');

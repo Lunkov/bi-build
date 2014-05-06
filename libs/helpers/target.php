@@ -14,6 +14,8 @@ class Target {
   private $home_dir;
   private $short_dir;
   
+  private $sign = null;
+  
   private $defines = array();
   private $includes = array();
   private $include_pathes = array();
@@ -30,9 +32,13 @@ class Target {
     
     $this->name = $params['name'];
  	  $this->short_name = $params['short_name'];
+    $this->short_dir = $params['dir'];
     
     if(isset($params['type'])) {
       $this->type = $params['type'];
+    }
+    if(isset($params['sign'])) {
+      $this->sign = $params['sign'];
     }
     
     if(!isset($params['root'])) {
@@ -61,15 +67,15 @@ class Target {
 		}
     
     if(isset($params['includes'])) {
-      $this->includes = $params['includes'];
+      $this->includes = BuildUtils::string2array($params['includes']);
     }
 
     if(isset($params['linkes'])) {
-      $this->linkes = $params['linkes'];
+      $this->linkes = BuildUtils::string2array($params['linkes']);
     }
     
     if(isset($params['defines'])) {
-      $this->defines = $params['defines'];
+      $this->defines = BuildUtils::string2array($params['defines']);
     }
     
     if($this->type == TypeTarget::BUILDING) {
@@ -97,8 +103,17 @@ class Target {
   public function getName() {
     return $this->name;
   }
+  public function getShortName() {
+    return $this->short_name;
+  }
   public function getHomeDir() {
     return $this->home_dir;
+  }
+  public function getShortDir() {
+    return $this->short_dir;
+  }
+  public function getSign() {
+    return $this->sign;
   }
   public function getIncludes() {
     return $this->include_pathes;
@@ -122,11 +137,10 @@ class Target {
     return isset($this->cache);
   }
   public function make($params) {
-    Build::useTool($this->make_tool, $this->make_func, array(
-                                              'buildinfo' => $params['buildinfo'],
-                                              'target' => $this,
-                                              'queue' => $params['queue']
-                                        ));
+    Build::get()->useTool($this->make_tool, $this->make_func, 
+                                      array_merge($params, array(
+                                                  'target' => $this,
+                                        )));
   }
   
   public function setBuildPath($root_build_path) {

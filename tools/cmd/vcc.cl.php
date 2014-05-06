@@ -15,7 +15,7 @@ class vcc_cl extends Process {
  
   private $tool = 'cl.exe';
   //put your code here
-  public function prepare($buildinfo, $build_dir, $env_tool, $target_name, &$target) {
+  public function prepare($buildinfo, $build_dir, $env_tool, &$target) {
 
     $dir = Utils::mkdir($build_dir.DIRECTORY_SEPARATOR.Utils::getRelativePath($home_dir, $file));// TODO .DIRECTORY_SEPARATOR.Utils::getPath($file));
     $fn = $dir.DIRECTORY_SEPARATOR.Utils::getFileName($file);
@@ -32,7 +32,7 @@ class vcc_cl extends Process {
 		
 		$cmd = $this->tool_cl.' /nologo @"'.$filename_rsp.'"';
 		//echo $cmd."\n";
-		Build::get()->addScript(array(
+		Build::get()->addScript($target->getName(), array(
                               'home_dir' => $this->home_path,
                               'script_name' => $cmd,
                               'env' => $env_tool,

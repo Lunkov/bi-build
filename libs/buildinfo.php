@@ -30,6 +30,7 @@ class BuildInfo {
 		$this->os_type = $os_type;
 		$this->platform = $platform;
 		$this->variant = $variant;
+    $this->build_path = Enviroment::getTemp();
     $this->setCalcBuildPath();
 	}
 	public function setOSVersion($os_version) {
@@ -65,7 +66,12 @@ class BuildInfo {
 		return $this->variant;
 	}
 	public function toString() {
-    return $this->variant. '.' .$this->os_type. '.' . $this->platform;
+    //return $this->variant. '.' .$this->os_type. '.' . $this->platform;
+    return  'OS: '.$this->getOS()."\n".
+            'Platform: '.$this->getPlatform()."\n".
+            'Variant: '.$this->getVariant()."\n".
+            'Build directory: '.$this->getBuildPath()."\n";
+    
   }
 
   /*

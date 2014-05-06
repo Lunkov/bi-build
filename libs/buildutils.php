@@ -91,6 +91,18 @@ class BuildUtils {
 		}
 		return $ret;
 	}
+  
+	public static function string2array($data) {
+    $separator = ';';
+    $ret = array();
+    if(is_string($data)) {
+      $ret = explode($separator, $data);
+    }
+    if(is_array($data)) {
+      $ret = $data;
+    }
+		return $ret;
+  }
 
 	public static function getFileByExt($data, $ext) {
 		if(is_array($data)) {

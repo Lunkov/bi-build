@@ -128,6 +128,10 @@ class VCC130 {
 		unset($this->lib_path);
 		$this->lib_path = array();
 		//var_dump($buildinfo);
+    if(!is_object($buildinfo)) {
+      Logger::get()->out(Logger::Critical, "BuildInfo is not object\n". var_export($buildinfo));
+      return;
+    }
 		
 		if($buildinfo->getPlatform() == 'x32') {
 			$this->lib_path[] = $this->params['home_path'].DIRECTORY_SEPARATOR.'lib';
@@ -159,10 +163,10 @@ class VCC130 {
 	private function initIncludes($target) {
 		$inc = array();
 		$inc = array_merge($inc, $this->include_path);
-		$inc = array_merge($inc, $target['include']);
+		$inc = array_merge($inc, $target->getIncludes());
 		//var_dump($target['link']);
-		if(is_array($target['link'])) {
-			foreach($target['link'] as $link) {
+		if(is_array($target->getLinks())) {
+			foreach($target->getLinks() as $link) {
 				//var_dump($link);
 				//if(isset($link['root']) && isset($link['target'])) {
 					//$tg = Build::get()->getTarget($link['root'], $link['target']);
@@ -170,8 +174,8 @@ class VCC130 {
 					if(!is_null($tg)) {
 						$inc = array_merge($inc, $this->initIncludes($tg));
 					}
-					if(is_array($tg['include'])) {
-						$inc = array_merge($inc, $tg['include']);
+					if(is_array($tg->getIncludes())) {
+						$inc = array_merge($inc, $tg->getIncludes());
 					}
 				//}
 			}
@@ -184,8 +188,8 @@ class VCC130 {
 		//$inc = array_merge($inc, $this->include_path);
 		//$inc = array_merge($inc, $target['include']);
 		//var_dump($target['link']);
-		if(is_array($target['link'])) {
-			foreach($target['link'] as $link) {
+		if(is_array($target->getLinks())) {
+			foreach($target->getLinks() as $link) {
 				//var_dump($link);
 				//if(isset($link['root']) && isset($link['target'])) {
 					//$tg = Build::get()->getTarget($link['root'], $link['target']);
@@ -211,14 +215,14 @@ class VCC130 {
 		return array_keys(array_flip($inc));
 	}
 		
-	private function compile($buildinfo, $build_dir, $target_name, $cflags, &$target) {
-		if(!is_array($target['src'])) {
+	private function compile($buildinfo, $build_dir, $cflags, &$target) {
+		if(!is_array($target->getSrc())) {
 			return array();
 		}
 		
     Timers::get()->start('vcc.compile');
     
-		$b_dir = Utils::mkdir($build_dir.$target['dir']);
+		$b_dir = Utils::mkdir($build_dir.$target->getShortDir());
 		echo '+'.$b_dir."\n";
 		
 		$inc = $this->initIncludes($target);
@@ -254,8 +258,8 @@ class VCC130 {
 		}
 		
 		$cl_result = array();
-		foreach($target['src'] as $file) {
-			//$filename_in = $target['home_dir'].DIRECTORY_SEPARATOR.$file;
+		foreach($target->getSrc() as $file) {
+			//$filename_in = $target->getHomeDir().DIRECTORY_SEPARATOR.$file;
 			$filename_in = $file;
 			$extention  = Utils::getFileExtension($file);
 			//echo '++'.$b_dir."\n";
@@ -264,61 +268,61 @@ class VCC130 {
 						$cl_result[] = $filename_in;
 						break;
 			case 'ts':
-						$cl_result[] = $this->ts2qm($b_dir, $target['home_dir'], $filename_in);
+						$cl_result[] = $this->ts2qm($b_dir, $target, $filename_in);
 						break;
 			case 'rc':
-						$cl_result[] = $this->rc2res($b_dir, $target['home_dir'], $filename_in, $flags, $includes);
+						$cl_result[] = $this->rc2res($b_dir, $target, $filename_in, $flags, $includes);
 						break;
 			case 'h':
 						break;
 			case 'c':
-						$cl_result[] = $this->c2obj($b_dir, $target['home_dir'], $filename_in, $flags, $includes);
+						$cl_result[] = $this->c2obj($b_dir, $target, $filename_in, $flags, $includes);
 						break;
 			case 'cpp':
-						$cl_result[] = $this->cpp2obj($b_dir, $target['home_dir'], $filename_in, $flags, $includes);
+						$cl_result[] = $this->cpp2obj($b_dir, $target, $filename_in, $flags, $includes);
 						break;
 			default:
 						//$cl_result[] = $b_dir.DIRECTORY_SEPARATOR.$filename_in;
 						break;
 			}
 		}
-		Build::get()->execScripts();
 		Timers::get()->stop('vcc.compile');
 		
 		return $cl_result;
 	}
 	
-	public function static_lib($buildinfo, $build_dir, $target_name, &$target) {
+	public function static_lib($params) {
     
-    $this->initBin($buildinfo);
+    $target = $params['target'];
+    $this->initBin($params['buildinfo']);
     
-		$b_dir = Utils::mkdir($build_dir.$target['dir']);
+		$b_dir = Utils::mkdir($params['build_dir'].$target->getShortDir());
 		echo '+'.$b_dir."\n";
 		
-		$result = $build_dir.$target['dir'].DIRECTORY_SEPARATOR.$target['short_name'].'.lib';
+		$result = $build_dir.$target->getShortDir().DIRECTORY_SEPARATOR.$target->getShortName().'.lib';
 		echo 'result = '.$result."\n";
 		Build::get()->setResult($target_name, $result);
 		//TODO!!!
 		//if(file_exists($result)) return;
 				
-		$this->initLibs($buildinfo);
+		$this->initLibs($params['buildinfo']);
 		
-		$cl_result = $this->compile($buildinfo, $build_dir, $target_name, '/DSECURITY_WIN32 ', $target); 
+		$cl_result = $this->compile($params['buildinfo'], $build_dir, '/DSECURITY_WIN32 ', $target); 
     		
     Timers::get()->start('vcc.link');
-		$link_result = $this->obj2lib($buildinfo, $build_dir.$target['dir'].DIRECTORY_SEPARATOR, self::file_list(self::link_files($cl_result)), $libs, $target);
-		Build::get()->execScripts();
+		$link_result = $this->obj2lib($params['buildinfo'], $build_dir.$target->getShortDir().DIRECTORY_SEPARATOR, self::file_list(self::link_files($cl_result)), $libs, $target);
 		Timers::get()->stop('vcc.link');
 		
 		//Build::get()->setResult($target_name, $link_result);
 	}
 
-	public function dynamic_lib($buildinfo, $build_dir, $target_name, &$target) {
-    $this->initBin($buildinfo);
+	public function dynamic_lib($params) {
+        echo 'yuyuyu';
+    $this->initBin($params['buildinfo']);
     
-		$b_dir = Utils::mkdir($build_dir.$target['dir']);
+		$b_dir = Utils::mkdir($build_dir.$target->getShortDir());
 		
-		$result = $build_dir.$target['dir'].DIRECTORY_SEPARATOR.$target['short_name'].'.dll';
+		$result = $build_dir.$target->getShortDir().DIRECTORY_SEPARATOR.$target->getShortName().'.dll';
 		echo 'result = '.$result."\n";
 		Build::get()->setResult($target_name, $result);
 		//TODO!!!
@@ -326,22 +330,23 @@ class VCC130 {
 				
 		$this->initLibs($buildinfo);
 		
-		$cl_result = $this->compile($buildinfo, $build_dir, $target_name, '/DSECURITY_WIN32 ', $target); 
+		$cl_result = $this->compile($params['buildinfo'], $build_dir, '/DSECURITY_WIN32 ', $target); 
 		
     Timers::get()->start('vcc.link');
-		$link_result = $this->obj2dll($buildinfo, $build_dir.$target['dir'].DIRECTORY_SEPARATOR, self::file_list(self::link_files($cl_result)), $libs, $target);
-		Build::get()->execScripts();
+		$link_result = $this->obj2dll($params['buildinfo'], $build_dir.$target->getShortDir().DIRECTORY_SEPARATOR, self::file_list(self::link_files($cl_result)), $libs, $target);
 		Timers::get()->stop('vcc.link');
 		
 		//Build::get()->setResult($target_name, $link_result);
 	}
 	
-	public function console_exe($buildinfo, $build_dir, $target_name, &$target) {
-    $this->initBin($buildinfo);
+	public function console_exe($params) {
+    $target = $params['target'];
+    $build_dir = $params['dir'];
+    $this->initBin($params['buildinfo']);
     
-		$b_dir = Utils::mkdir($build_dir.$target['dir']);
+		$b_dir = Utils::mkdir($build_dir.$target->getShortDir());
 		
-		$result = $build_dir.$target['dir'].DIRECTORY_SEPARATOR.$target['short_name'].'.exe';
+		$result = $build_dir.$target->getShortDir().DIRECTORY_SEPARATOR.$target->getShortName().'.exe';
 		echo 'result = '.$result."\n";
 		Build::get()->setResult($target_name, $result);
 		//TODO!!!
@@ -349,84 +354,86 @@ class VCC130 {
 				
 		$this->initLibs($buildinfo);
 		
-		$cl_result = $this->compile($buildinfo, $build_dir, $target_name, '', $target); 
+		$cl_result = $this->compile($params['buildinfo'], $build_dir, '', $target); 
 		
     Timers::get()->start('vcc.link');
-		$link_result = $this->obj2exe($buildinfo, $build_dir.$target['dir'].DIRECTORY_SEPARATOR, self::file_list(self::link_files($cl_result)), $libs, $target);
-		Build::get()->execScripts();
+		$link_result = $this->obj2exe($params['buildinfo'], $build_dir.$target->getShortDir().DIRECTORY_SEPARATOR, self::file_list(self::link_files($cl_result)), $libs, $target);
 		Timers::get()->stop('vcc.link');
 		
 		//Build::get()->setResult($target_name, $link_result);
 	}
 
-	public function win_exe($buildinfo, $build_dir, $target_name, &$target) {
-    $this->initBin($buildinfo);
+	public function win_exe($params) {
+    $target = $params['target'];
+    $this->initBin($params['buildinfo']);
     
-		$b_dir = Utils::mkdir($build_dir.$target['dir']);
+		$b_dir = Utils::mkdir($build_dir.$target->getShortDir());
 		
-		$result = $build_dir.$target['dir'].DIRECTORY_SEPARATOR.$target['short_name'].'.exe';
+		$result = $build_dir.$target->getShortDir().DIRECTORY_SEPARATOR.$target->getShortName().'.exe';
 		echo 'result = '.$result."\n";
 		Build::get()->setResult($target_name, $result);
 		//TODO!!!
 		//if(file_exists($result)) return;
 				
-		$this->initLibs($buildinfo);
+		$this->initLibs($params['buildinfo']);
 		
-		$cl_result = $this->compile($buildinfo, $build_dir, $target_name, '/DSECURITY_WIN32 ', $target); 
+		$cl_result = $this->compile($params['buildinfo'], $build_dir, '/DSECURITY_WIN32 ', $target); 
 		
     Timers::get()->start('vcc.link');
-		$link_result = $this->obj2exe($buildinfo, $build_dir.$target['dir'].DIRECTORY_SEPARATOR, self::file_list(self::link_files($cl_result)), $libs, $target);
-		Build::get()->execScripts();
+		$link_result = $this->obj2exe($params['buildinfo'], $build_dir.$target->getShortDir().DIRECTORY_SEPARATOR, self::file_list(self::link_files($cl_result)), $libs, $target);
 		Timers::get()->stop('vcc.link');
 	
 		//Build::get()->setResult($target_name, $link_result);
 	}
 		
-	public function driver($buildinfo, $build_dir, $target_name, &$target) {
-
-		$b_dir = Utils::mkdir($build_dir.$target['dir']);
+	public function driver($params) {
+    $target = $params['target'];
+		$b_dir = Utils::mkdir($build_dir.$target->getShortDir());
 		
-		$result = $build_dir.$target['dir'].DIRECTORY_SEPARATOR.$target['short_name'].'.sys';
+		$result = $build_dir.$target->getShortDir().DIRECTORY_SEPARATOR.$target->getShortName().'.sys';
 		//Build::get()->setResult($target_name, $result);
 		
 		echo 'DRIVER = '.$result."\n";
 		//TODO!!!
 		//if(file_exists($result)) return;
 				
-		$this->initLibs($buildinfo);
+		$this->initLibs($params['buildinfo']);
 		
-		$cl_result = $this->compile($buildinfo, $build_dir, $target_name, ' /hotpatch /kernel /DMSVS_TEST_DRV /DSECURITY_KERNEL /DNTDDI_VERSION=NTDDI_WINXPSP3 /D_WIN2K_COMPAT_SLIST_USAGE ', $target); 
+		$cl_result = $this->compile($params['buildinfo'], $build_dir, ' /hotpatch /kernel /DMSVS_TEST_DRV /DSECURITY_KERNEL /DNTDDI_VERSION=NTDDI_WINXPSP3 /D_WIN2K_COMPAT_SLIST_USAGE ', $target); 
 		
     Timers::get()->start('vcc.link');
-		$link_result = $this->obj2sys($buildinfo, $build_dir.$target['dir'].DIRECTORY_SEPARATOR, self::file_list($cl_result), $libs, $target);
-		Build::get()->execScripts();
+		$link_result = $this->obj2sys($params['buildinfo'], $build_dir.$target->getShortDir().DIRECTORY_SEPARATOR, self::file_list($cl_result), $libs, $target);
 		Timers::get()->stop('vcc.link');
 		
-    $b_dir = $build_dir.$target['dir'].DIRECTORY_SEPARATOR.'.signdrv';
+    $b_dir = $build_dir.$target->getShortDir().DIRECTORY_SEPARATOR.'.signdrv';
     Utils::rmdir($b_dir);
     $b_dir = Utils::mkdir($b_dir);
     copy($result, $b_dir.DIRECTORY_SEPARATOR.Utils::getBaseName($result));
-    $inf_file = BuildUtils::getFileByExt($target['src'], 'inf');
+    $inf_file = BuildUtils::getFileByExt($target->getSrc(), 'inf');
     if(isset($inf_file)) {
       copy($inf_file, $b_dir.DIRECTORY_SEPARATOR.Utils::getBaseName($inf_file));
     }
     $sign = new SignTool();
     $sign->init(array(
                   'home_dir' => $this->sdk_bin_path,
-                  'sign' => (isset($target['sign'])?$target['sign']:null),
+                  'sign' => $target->getSign(),
                 ));
     $sign->sign($b_dir.DIRECTORY_SEPARATOR.Utils::getBaseName($result));
     $cmd = 'call "'.$this->tool_inf2cat.'" /os:Server2008R2_X64,Server2008_X64,Server2003_X64,XP_X64,Vista_X64,7_X64,8_X64,Server8_X64 /driver:"'.$b_dir.'"';
-    Build::get()->execScript($cmd);
+    Build::get()->addScript($target->getName(), array(  'home_dir' => $this->home_path,
+										'script_name' => $cmd,
+										'env' => $this->env,
+										//'log_file' => $filename_log
+										));
     $sign->sign($b_dir.DIRECTORY_SEPARATOR.Utils::getFileName($result).'.cat');
     
 		//Build::get()->setResult($target_name, $link_result);
 
 	}	
 	
-	private function c2obj($build_dir, $home_dir, $file, $flags, $includes) {
+	private function c2obj($build_dir, $target, $file, $flags, $includes) {
 
-    $dir = Utils::mkdir($build_dir.DIRECTORY_SEPARATOR.Utils::getRelativePath($home_dir, $file));// TODO .DIRECTORY_SEPARATOR.Utils::getPath($file));
+    $dir = Utils::mkdir($build_dir.DIRECTORY_SEPARATOR.Utils::getRelativePath($target->getHomeDir(), $file));// TODO .DIRECTORY_SEPARATOR.Utils::getPath($file));
     $fn = $dir.DIRECTORY_SEPARATOR.Utils::getFileName($file);
 		$filename_log = $fn.'.log';
 		$filename_out = $fn.'.obj';
@@ -443,7 +450,7 @@ class VCC130 {
 		
 		$cmd = $this->tool_cl.' /nologo @"'.$filename_rsp.'"';
 		//echo $cmd."\n";
-		Build::get()->addScript(array(  'home_dir' => $this->home_path,
+		Build::get()->addScript($target->getName(), array(  'home_dir' => $this->home_path,
 										'script_name' => $cmd,
 										'env' => $this->env,
 										'log_file' => $filename_log
@@ -452,9 +459,9 @@ class VCC130 {
 		return $filename_out;
 	}
 
-	private function cpp2obj($build_dir, $home_dir, $file, $flags, $includes) {
+	private function cpp2obj($build_dir, $target, $file, $flags, $includes) {
 
-    $dir = Utils::mkdir($build_dir.DIRECTORY_SEPARATOR.Utils::getRelativePath($home_dir, $file));// TODO .DIRECTORY_SEPARATOR.Utils::getPath($file));
+    $dir = Utils::mkdir($build_dir.DIRECTORY_SEPARATOR.Utils::getRelativePath($target->getHomeDir(), $file));// TODO .DIRECTORY_SEPARATOR.Utils::getPath($file));
     $fn = $dir.DIRECTORY_SEPARATOR.Utils::getFileName($file);
 		$filename_log = $fn.'.log';
 		$filename_out = $fn.'.obj';
@@ -469,7 +476,7 @@ class VCC130 {
 		
 		$cmd = $this->tool_cl.' /nologo @"'.$filename_rsp.'"';
 		//echo $cmd."\n";
-		Build::get()->addScript(array(
+		Build::get()->addScript($target->getName(), array(
                     'home_dir' => $this->home_path,
 										'script_name' => $cmd,
 										'env' => $this->env,
@@ -479,9 +486,9 @@ class VCC130 {
 		return $filename_out;
 	}
 
-	private function rc2res($build_dir, $home_dir, $file, $flags, $includes) {
+	private function rc2res($build_dir, $target, $file, $flags, $includes) {
 
-    $dir = Utils::mkdir($build_dir.DIRECTORY_SEPARATOR.Utils::getRelativePath($home_dir, $file));// TODO .DIRECTORY_SEPARATOR.Utils::getPath($file));
+    $dir = Utils::mkdir($build_dir.DIRECTORY_SEPARATOR.Utils::getRelativePath($target->getHomeDir(), $file));// TODO .DIRECTORY_SEPARATOR.Utils::getPath($file));
     $fn = $dir.DIRECTORY_SEPARATOR.Utils::getFileName($file);
 		$filename_log = $fn.'.log';
 		$filename_out = $fn.'.res';
@@ -502,7 +509,7 @@ class VCC130 {
 		//$cmd = $this->tool_rc.' /nologo @"'.$filename_rsp.'"';
     $cmd = $this->tool_rc.' /nologo /r /l 0x409 '.$flags.' /i"C:\tools\SDK\8.1\Include\api" /v /fo "'.$filename_out.'" "'.$file.'"';
 		//echo $cmd."\n";
-		Build::get()->addScript(array(  'home_dir' => $this->sdk_bin_path,
+		Build::get()->addScript($target->getName(), array(  'home_dir' => $this->sdk_bin_path,
 										'script_name' => $cmd,
 										'env' => $this->env,
 										'log_file' => $filename_log
@@ -511,9 +518,9 @@ class VCC130 {
 		return $filename_out;
 	}
 
-	private function ts2qm($build_dir, $home_dir, $file) {
+	private function ts2qm($build_dir, $target, $file) {
 
-    $dir = Utils::mkdir($build_dir.DIRECTORY_SEPARATOR.Utils::getRelativePath($home_dir, $file));
+    $dir = Utils::mkdir($build_dir.DIRECTORY_SEPARATOR.Utils::getRelativePath($target->getHomeDir(), $file));
     $fn = $dir.DIRECTORY_SEPARATOR.Utils::getFileName($file);
 		$filename_log = $fn.'.log';
 		$filename_out = $fn.'.qm';
@@ -522,7 +529,7 @@ class VCC130 {
 		
 		$cmd = 'lrelease.exe "'.$file.'" -qm "'.$filename_out.'"';
 		//echo $cmd."\n";
-		Build::get()->addScript(array(  'home_dir' => $this->qt_bin_path,
+		Build::get()->addScript($target->getName(), array(  'home_dir' => $this->qt_bin_path,
 										'script_name' => $cmd,
 										'env' => $this->env,
 										'log_file' => $filename_log
@@ -532,9 +539,9 @@ class VCC130 {
 	}
 		
 	private function obj2lib($buildinfo, $build_dir, $files, $libs, &$target) {
-		$filename_log = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.log';
-		$filename_out = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.lib';
-		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.rsp';
+		$filename_log = $build_dir.DIRECTORY_SEPARATOR.$target->getShortName().'.log';
+		$filename_out = $build_dir.DIRECTORY_SEPARATOR.$target->getShortName().'.lib';
+		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.$target->getShortName().'.rsp';
 		
 		$flags = '/LTCG /SUBSYSTEM:CONSOLE ';///NODEFAULTLIB:LIBCMT 
 		// /MACHINE:{ARM|EBC|X64|X86}
@@ -556,7 +563,7 @@ class VCC130 {
 		$cmd = $this->tool_lib.' /nologo @"'.$filename_rsp.'"';
 		echo $cmd."\n";
 		//var_dump($this->env);
-		Build::get()->addScript(array(  'home_dir' => $this->home_path,
+		Build::get()->addScript($target->getName(), array(  'home_dir' => $this->home_path,
 										'script_name' => $cmd,
 										'env' => $this->env,
 										'log_file' => $filename_log
@@ -566,9 +573,9 @@ class VCC130 {
 	}
 
 	private function obj2exe($buildinfo, $build_dir, $files, $libs, &$target) {
-		$filename_log = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.log';
-		$filename_out = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.exe';
-		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.rsp';
+		$filename_log = $build_dir.DIRECTORY_SEPARATOR.$target->getShortName().'.log';
+		$filename_out = $build_dir.DIRECTORY_SEPARATOR.$target->getShortName().'.exe';
+		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.$target->getShortName().'.rsp';
 		
 		$flags = '/LTCG /SUBSYSTEM:CONSOLE ';
 		// /MACHINE:{ARM|EBC|X64|X86}
@@ -583,7 +590,7 @@ class VCC130 {
 		
 		$cmd = $this->tool_link.' /nologo @"'.$filename_rsp.'"';
 		echo $cmd."\n";
-		Build::get()->addScript(array(  'home_dir' => $this->home_path,
+		Build::get()->addScript($target->getName(), array(  'home_dir' => $this->home_path,
 										'script_name' => $cmd,
 										'env' => $this->env,
 										'log_file' => $filename_log
@@ -593,9 +600,9 @@ class VCC130 {
 	}
 
 	private function obj2dll($buildinfo, $build_dir, $files, $libs, &$target) {
-		$filename_log = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.log';
-		$filename_out = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.dll';
-		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.rsp';
+		$filename_log = $build_dir.DIRECTORY_SEPARATOR.$target->getShortName().'.log';
+		$filename_out = $build_dir.DIRECTORY_SEPARATOR.$target->getShortName().'.dll';
+		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.$target->getShortName().'.rsp';
 		
 		$flags = '/LTCG ';
 		// /MACHINE:{ARM|EBC|X64|X86}
@@ -609,7 +616,7 @@ class VCC130 {
 		
 		$cmd = $this->tool_link.' /nologo @"'.$filename_rsp.'"';
 		echo $cmd."\n";
-		Build::get()->addScript(array(  'home_dir' => $this->home_path,
+		Build::get()->addScript($target->getName(), array(  'home_dir' => $this->home_path,
 										'script_name' => $cmd,
 										'env' => $this->env,
 										'log_file' => $filename_log
@@ -619,9 +626,9 @@ class VCC130 {
 	}
 		
 	private function obj2sys($buildinfo, $build_dir, $files, $libs, &$target) {
-		$filename_log = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.log';
-		$filename_out = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.sys';
-		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.$target['short_name'].'.rsp';
+		$filename_log = $build_dir.DIRECTORY_SEPARATOR.$target->getShortName().'.log';
+		$filename_out = $build_dir.DIRECTORY_SEPARATOR.$target->getShortName().'.sys';
+		$filename_rsp = $build_dir.DIRECTORY_SEPARATOR.$target->getShortName().'.rsp';
 		
     // /OPT:REF /OPT:ICF   /INTEGRITYCHECK 
 		$flags  = ' /RELEASE /kernel /driver /LTCG';
@@ -641,7 +648,7 @@ class VCC130 {
 		
 		$cmd = $this->tool_link.' /nologo @"'.$filename_rsp.'"';
 		echo $cmd."\n";
-		Build::get()->addScript(array(  'home_dir' => $this->home_path,
+		Build::get()->addScript($target->getName(), array(  'home_dir' => $this->home_path,
 										'script_name' => $cmd,
 										'env' => $this->env,
 										'log_file' => $filename_log
